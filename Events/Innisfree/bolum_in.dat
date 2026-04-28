@@ -1,0 +1,22 @@
+Bolum Input Deck
+
+diameter           = 0.35       # meters
+velocity           = 14400.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+theta_deg          = 72.        # degrees from the horizontal
+init_strength      = 4.e6       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+strength_secondary = 1.e7       # material strength of secondary fragments
+density            = 3400.0     # kg/m^3
+porosity           = 0.10       # 0 to 1
+Cd                 = 0.7
+L_ablation         = 5.e6
+altstart           = 70000.     # meters
+xstart             = 0.         # keep at zero (for 2-D trajectory)
+tstart             = 0.0        # start time in seconds
+dt                 = 0.003      # timestep in seconds
+tstop              = 20.0       # stop time in seconds
+n_fragments        = 1.         # number of fragments
+rho_tau_scale      = 0
+
+
+
+Innisfree (1977)

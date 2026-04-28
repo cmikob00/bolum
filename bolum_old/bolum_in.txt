@@ -1,0 +1,19 @@
+Bolum Input Deck
+
+diameter           = 19.         # meters
+velocity           = 19000.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+theta_deg          = 18.        # degrees from the horizontal
+init_strength      = 3.e6       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+density            = 3300.0     # kg/m^3
+porosity           = 0.10       # 0 to 1
+altstart           = 100000.    # meters
+xstart             = 0.         # keep at zero (for 2-D trajectory)
+tstart             = 0.0        # start time in seconds
+dt                 = 0.003      # timestep in seconds
+tstop              = 20.0       # stop time in seconds
+n_fragments        = 3.         # number of fragments
+rho_tau_scale      = 1          # luminosity scaling on/off
+broadband_si       = 0.         # Flag to switch from vis optical to broadband silicon response
+strength_secondary = 1.e5       # material strength of secondary fragments
+
+9f89b785c4f975efd8ff674285d7f7e8dce13cc4dc552b49dbc5525d11e6caa3

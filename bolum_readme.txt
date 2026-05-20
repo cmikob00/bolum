@@ -1,12 +1,52 @@
 Bolum Readme
 
+   May 2026 - v10:
+   Changed read-in function rdinput to use default values if not found in input deck.
+   Only required inputs now are: diameter, velocity, theta_deg, init_strength, and density.
+   Uses a dictionary now to handle input read-in.  Much more efficient.
+   Added power vs altitude output file.
+   
+   Still need to implement fragmentation model with non-equal masses per fragment.
+
+#######################
+
+   April 2026 - v9:
+   Changed density scaling term and exponent in tau_calc to 1.e-3 and 0.45 (from 1.3e-3 and 0.97)
+   In order to preserve physical fidelity.
+   Modified how the code determines inputs and outputs.  User is now prompted to enter the name
+   of the event.  This becomes part of the input/output file path.  Prevents needing to modify
+   the source code every time one wants to run a specific event.
+   Changed n_fragments upon fragmentation to n_fragments = n_fragments**frag_stage in order to
+   capture the fact that fragments will subsequently fragment again into n_fragments fragments.
+   Added a terminal material strength of 2.e7 Pa in order to prevent luminosity from blowing up.
+
+   Need to think about how to implement fragmentation model with non-equal masses per fragment...
+
+########################
+
    March 2026 - v8:
    Moved drag coefficient (Cd) and heat of ablation (L_ablation) to input deck
    Removed broadband Si flag since luminous efficiency τ term assumes a broadband optical sensor
    Renamed bolum_in.txt to bolum_in.dat
    Set some default input parameters so the user need not define everything in the input deck (unless desired)
-   Added inout deck and event paths for user ease.
+   Added input deck and event paths for user ease.
    Added tertiary and quaternary material strength input parameters for even more fragmentation options.
+   Changed density scaling term and exponent in tau_calc to 1.4e-3 (from 5.e-3) and to 0.97 (from 0.67).
+
+   Need to think about better calculating tau.  The density scaling term (above) is probably not right, and
+   results in a luminous efficiency that is probably too high (~0.9 at max).
+   There is an opportunity to add a shock term, not for luminous output, but for re-radiation to the surface
+   of the bolide.  It could be "activated" at a certain altitude (density) or ramp up gradually.  The rationale
+   for this addition would be to allow a radiating shock to radiate back to the surface of the bolide,
+   increase the heat flux at the surface of the bolide, thus increasing the dmdt and therefore total luminosity.
+   Would have to be careful to not make this too drastic (don't want dmdt to increase too much) or else there
+   won't be any bolide left to fragment.  This change would probably be more physically realistic than an
+   artificially high tau for large bolides.  For Chelyabinsk, however, could try to compensate by making L_ablation
+   slightly larger (from 5.e6). Maybe also decrease drag coefficient slightly (which will lower heat flux from drag
+   term and therefore heat anlation-driven mass loss but also will lower luminosity). So basically luminosity
+   depends heavily on drag: drag influences heat flux --> heat flux influences dmdt, but also Fdrag*v is part of
+   E_dot_total.  NB this only matters for large bolides.  For smaller bolides we probably don't have to worry about this,
+   and the code doesn't worry about this.
 
    February 2026 - v7:
    Single luminous efficiency τ from Borovička et al. (2020)

@@ -1,9 +1,9 @@
 #######################################################################
-# Bolide Luminosity Model (bolum) Version 9                           #
+# Bolide Luminosity Model (bolum) Version 10                           #
 # Author: C.J. Miko                                                   #
 # Instructions: Modify inputs in the input deck (bolum_in.) and run   #
 # Please see available readme for additional information              #
-# Total line count: 1323 lines                                        #
+# Total line count: 1358 lines                                        #
 # This code is UNCLASSIFIED                                           #
 #######################################################################
 
@@ -12,9 +12,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-#### File Paths ####
-basename = f"/Users/julie/Desktop/Projects/bolides/Events/Chelyabinsk/"
-inputpath = f"{basename}bolum_in.dat"
+#### File Path ####
+basename = f"/Users/julie/Desktop/Projects/bolides/Events/"
 ####################
 
 ############ Variable Declarations ####################
@@ -40,7 +39,7 @@ L          = 0.0065   # temperature lapse rate of atmosphere
 
 # bolide constants
 epsilon           = 0.9    # emissivity of bolide
-flare_duration    = 0.3   # flare duration after fragmentation in sec
+flare_duration    = 0.1   # flare duration after fragmentation in sec
 
 # other simulation parameters
 mxcycl  = 100000           # maximum number of cycles
@@ -52,35 +51,19 @@ new_row = np.zeros(1)
 # reading in input deck
 def rdinput(inputpath):
 
-    # set default input parameters
-    # user must input (on input deck) diameter, velocity, theta_deg, and density
-    diameter            = 0.0
-    velocity            = 0.0
-    theta_deg           = 0.0
-    init_strength       = 1.e5
-    strength_secondary  = 1.e15
-    strength_tertiary   = 1.e15
-    strength_quaternary = 1.e15
-    density             = 0.0
-    porosity            = 0.1
-    Cd                  = 1.
-    L_ablation          = 5.e6
-    altstart            = 100000.
-    xstart              = 0.
-    tstart              = 0.
-    dt                  = 0.003
-    tstop               = 60.
-    n_fragments         = 3.
-    rho_tau_scale       = 0
-
     params = {}
+
     with open(inputpath, "r") as f:
         lines = f.readlines()[2:]
 
     for line in lines:
+
+        # skip blank/comment lines
         if "=" not in line:
             continue
+
         key, rest = line.split("=", 1)
+
         key = key.strip()
         value_str = rest.split("#")[0].strip()
 
@@ -91,61 +74,93 @@ def rdinput(inputpath):
 
         params[key] = value
 
-    diameter            = params["diameter"]
-    velocity            = params["velocity"]
-    theta_deg           = params["theta_deg"]
-    init_strength       = params["init_strength"]
-    density             = params["density"]
-    porosity            = params["porosity"]
-    altstart            = params["altstart"]
-    xstart              = params["xstart"]
-    tstart              = params["tstart"]
-    dt                  = params["dt"]
-    tstop               = params["tstop"]
-    n_fragments         = params["n_fragments"]
-    strength_secondary  = params["strength_secondary"]
-    strength_tertiary   = params["strength_tertiary"]
-    strength_quaternary = params["strength_quaternary"]
-    rho_tau_scale       = params["rho_tau_scale"]
-    Cd                  = params["Cd"]
-    L_ablation          = params["L_ablation"]
+    #
+    # REQUIRED PARAMETERS
+    #
+    try:
+        diameter      = params["diameter"]
+        velocity      = params["velocity"]
+        theta_deg     = params["theta_deg"]
+        init_strength = params["init_strength"]
+        density       = params["density"]
+
+    except KeyError as e:
+        raise ValueError(f"Missing required input parameter: {e}")
+
+    #
+    # OPTIONAL PARAMETERS WITH DEFAULTS
+    #
+    strength_secondary  = params.get("strength_secondary", 1.e15)
+    strength_tertiary   = params.get("strength_tertiary", 1.e15)
+    strength_quaternary = params.get("strength_quaternary", 1.e15)
+    porosity            = params.get("porosity", 0.1)
+    Cd                  = params.get("Cd", 1.0)
+    L_ablation          = params.get("L_ablation", 5.e6)
+    n_fragments         = params.get("n_fragments", 50)
+    flare_duration      = params.get("flare_duration", 0.1)
+    rho_tau_scale       = params.get("rho_tau_scale", 0.0)
+    zstart              = params.get("zstart", 100000.0)
+    xstart              = params.get("xstart", 0.0)
+    tstart              = params.get("tstart", 0.0)
+    dt                  = params.get("dt", 0.003)
+    tstop               = params.get("tstop", 1.0)
 
     n_frag_init = n_fragments
 
-    return (diameter, velocity, theta_deg, density, porosity,
-            init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-            altstart, xstart, tstart, dt, tstop, n_fragments, rho_tau_scale, n_frag_init,
-            Cd, L_ablation)
+    return (
+        diameter,
+        velocity,
+        theta_deg,
+        init_strength,
+        strength_secondary,
+        strength_tertiary,
+        strength_quaternary,
+        density,
+        porosity,
+        Cd,
+        L_ablation,
+        n_fragments,
+        n_frag_init,
+        flare_duration,
+        rho_tau_scale,
+        zstart,
+        xstart,
+        tstart,
+        dt,
+        tstop
+    )
 
 # writing out initial parameters to output file
-def write_init_params(basename, diameter, velocity, theta_deg, density, porosity,
+def write_init_params(outputpath, diameter, velocity, theta_deg,
                       init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-                      altstart, xstart, tstart, dt, tstop, n_fragments,
-                      rho_tau_scale, n_frag_init,
-                      Cd, L_ablation):
+                      density, porosity, Cd, L_ablation,
+                      n_fragments, n_frag_init, flare_duration, rho_tau_scale,
+                      zstart, xstart, tstart, dt, tstop):
 
-    init_params = open(f'{basename}init_params.dat', 'w')
+    init_params = open(f'{outputpath}/init_params.dat', 'w')
 
-    init_params.write(f"Initialization Parameters for Bolide Luminosity and Fragmentation Simulation (v7)\n")
+    init_params.write(f"Initialization Parameters for Bolide Luminosity and Fragmentation Simulation\n")
     init_params.write(f"Diameter (m):                      {diameter:.3f}\n")
     init_params.write(f"velocity (m/s):                    {velocity:.3f}\n")
     init_params.write(f"Entry Angle to Horizon (deg):      {theta_deg:.3f}\n")
-    init_params.write(f"Density (kg/m^3):                  {density:.3f}\n")
-    init_params.write(f"Porosity:                          {porosity:.3f}\n")
-    init_params.write(f"Drag Coefficient:                  {Cd:.3f}\n")
-    init_params.write(f"Heat of Ablation (J/kg):           {L_ablation:.3e}\n")
     init_params.write(f"Initial Strength (Pa):             {init_strength:.3e}\n")
     init_params.write(f"Secondary Strength (Pa):           {strength_secondary:.3e}\n")
     init_params.write(f"Tertiary Strength (Pa):            {strength_tertiary:.3e}\n")
     init_params.write(f"Quaternary Strength (Pa):          {strength_quaternary:.3e}\n")
+    init_params.write(f"Density (kg/m^3):                  {density:.3f}\n")
+    init_params.write(f"Porosity:                          {porosity:.3f}\n")
+    init_params.write(f"Drag Coefficient:                  {Cd:.3f}\n")
+    init_params.write(f"Heat of Ablation (J/kg):           {L_ablation:.3e}\n")
+    init_params.write(f"Number of Fragments per stage:     {n_fragments}\n")
+    init_params.write(f"Initially set number of fragments: {n_frag_init}\n")
+    init_params.write(f"Flare Duration (sec):              {flare_duration:.3f}\n")
     init_params.write(f"Luminous Efficiency scaling term:  {rho_tau_scale:.1f}\n")
-    init_params.write(f"Initial Altitude (m):              {altstart:.3f}\n")
+    init_params.write(f"Initial Altitude (m):              {zstart:.3f}\n")
     init_params.write(f"Initial Position (m):              {xstart:.3f}\n")
     init_params.write(f"Starting Time (s):                 {tstart:.3f}\n")
     init_params.write(f"Timestep (s):                      {dt:.3f}\n")
     init_params.write(f"Maximum Time (s):                  {tstop:.3f}\n")
-    init_params.write(f"Number of Fragments per stage:     {n_fragments}\n")
-    init_params.write(f"Initially set number of fragments: {n_frag_init}\n")
+    
     init_params.close()
 
 # define general output file
@@ -167,6 +182,9 @@ def wr_power_vs_time(bolide_pvt, luminosity, t):
 
     bolide_pvt.write(f'{luminosity:.4e}   {t:.4e}\n')
 
+def wr_power_vs_alt(bolide_pva, luminosity, alt):
+
+    bolide_pva.write(f'{luminosity:.4e}   {alt:.4e}\n')
 
 # plotting function — simplified to single luminosity
 def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, velocities, accels, qs,
@@ -509,7 +527,7 @@ def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, vel
 
     print("All post-processing complete")
 
-############ New luminosity functions (v7) ############
+############ New luminosity functions (v7+) ############
 def tau_calc(v, mass, rho, rho_tau_scale, n_fragments):
 
     # This luminous efficiency function is designed to output
@@ -534,8 +552,10 @@ def tau_calc(v, mass, rho, rho_tau_scale, n_fragments):
     tau = np.exp(ln_tau)
 
     # apply air density scaling for large bolides (small bolides don't need it)
+    # this is not bulletproof
+    # updated to 1.e-3 and 0.4 for v9 on 7 April 2026 cjm
     if rho_tau_scale == 1:
-        tau = tau * (rho / 1.e-3)**0.4  # empirical term set to match Chelyabinsk luminosity
+        tau = tau * (rho / 1.e-3)**0.45  # empirical term set to match Chelyabinsk luminosity
 
     # tau is now in percent, so divide by 100 to get true value
     tau = tau / 100.
@@ -549,21 +569,18 @@ def tau_calc(v, mass, rho, rho_tau_scale, n_fragments):
     #     tau = tau * tau_scale
     # else: tau remains ~6% for v~19 km/s, m~1e3 kg (perfect for Benešov/Košice)
 
-    # for large bolides, luminous efficiency will be large, so scale up tau if necessary
-    # tau = tau_scale * tau
-
     return tau
 
 def lum_calc(tau, Fdrag, v, dmdt, n_frag_init, fragmented, t, flare_end_time):
 
     # calculate luminosity (recall tau was set to match optical outputs)
     # based on ablation only - not modeling a shock front
-    E_dot_total = Fdrag * v + 0.5 * v**2. * abs(dmdt)
+    E_dot_total = (Fdrag * v) + (0.5 * v**2. * abs(dmdt))
     luminosity = tau * E_dot_total
 
     # apply "pancake" model to flare if fragmented
     if fragmented and t <= flare_end_time:
-            luminosity = luminosity  * n_frag_init**0.33
+            luminosity = luminosity * n_frag_init**0.333
 
     return luminosity
 
@@ -584,7 +601,7 @@ def frag_attempt(bolide_outputs, alt, t, frag_stage, frag_times, frag_alts,
         r_fragment     = ((3. * mass_fragment) / (4. * pi * density))**(1. / 3.)
         dia_fragment   = 2. * r_fragment
         area_fragment  = 4. * pi * (dia_fragment / 2.)**2.
-        area_new       = area_fragment * n_fragments
+        area_new       = n_fragments * area_fragment
         mass_new       = mass_fragment * n_fragments # conserved
         flare_end_time = t + flare_duration
 
@@ -600,12 +617,12 @@ def frag_attempt(bolide_outputs, alt, t, frag_stage, frag_times, frag_alts,
 ################ Other Functions ###################
 
 # function to calculate initial kinematic quantities
-def trajectory_init(bolide_outputs, xstart, altstart, velocity, tstart, theta_deg):
+def trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg):
 
     # initial altitude
-    z   = altstart + R_Earth
+    z   = zstart + R_Earth
     R   = z
-    alt = altstart
+    alt = zstart
     print(f"initial altitude = {z:.4e} meters")
     bolide_outputs.write(f"Initial altitude = {z:.4e} meters\n")
 
@@ -783,7 +800,7 @@ def trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fd
     return x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s, surfx, surfz
 
 # estimate compressive strength based on density and porosity
-def compute_strength(init_strength):
+def compute_strength(init_strength, porosity):
 
     if init_strength > 0:
         # use input material strength in Pa
@@ -858,7 +875,7 @@ def atmos_pressure_calc(h, T):
 def atmos_density_calc(h, p, T):
 
     # temperature- and pressure-dependent atmospheric model from NASA GRC
-    # convert pressure back to kPa first
+    # convert pressure bback to kPa first
     rho = (p / 1000.) / (0.2869 * T)
 
     # standard exponential atmospheric model
@@ -1008,7 +1025,7 @@ def E_rad_total_calc(E_rad_total, luminosity, dt):
 # find total deposited energy
 def E_deposited_calc(E_deposited, Fdrag, v, dmdt, dt):
 
-    E_dot_mech = Fdrag * v + 0.5 * v**2 * abs(dmdt)
+    E_dot_mech = Fdrag * v + 0.5 * v**2. * abs(dmdt)
     E_deposited = E_deposited + E_dot_mech * dt
     print(f"total deposited energy is {E_deposited:.3e} Joules")
     print(f"total deposited energy is {E_deposited / jkt:.3e} kilotons")
@@ -1057,11 +1074,11 @@ def E_event_calc(bolide_outputs, E_rad_tot, E_deposited):
     return E_event
 
 ############ Main simulation function ############
-def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, porosity,
+def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
                             init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-                            zstart, xstart, tstart, dt, tstop, n_fragments,
-                            rho_tau_scale, n_frag_init,
-                            Cd, L_ablation):
+                            density, porosity, Cd, L_ablation,
+                            n_fragments, n_frag_init, flare_duration, rho_tau_scale,
+                            zstart, xstart, tstart, dt, tstop):
 
     # initialize timestep
     timestep = int(1)
@@ -1072,7 +1089,7 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
     mass = mass_init_calc(diameter, density)
 
     # compute initial material strength of bolide
-    strength_initial = compute_strength(init_strength) # your original function
+    strength_initial = compute_strength(init_strength, porosity)
     current_strength = strength_initial
 
     # initialize fragmentation model
@@ -1088,7 +1105,7 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
 
     # open output files
     # general output file
-    bolide_outputs = open(f'{basename}bolide_out.dat', 'w')
+    bolide_outputs = open(f'{outputpath}/bolide_out.dat', 'w')
     bolide_outputs.write(f"Bolide Luminosity and Fragmentation Simulation — 8\n")
     bolide_outputs.write(f"{header}\n\n")
     bolide_outputs.write(f"Initial area     = {area:.4e} m²\n")
@@ -1096,13 +1113,18 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
     bolide_outputs.write(f"Initial strength = {strength_initial:.4e} Pa\n\n")
 
     # power vs time output file
-    bolide_pvt = open(f'{basename}power_vs_time.dat', 'w')
+    bolide_pvt = open(f'{outputpath}/power_vs_time.dat', 'w')
     bolide_pvt.write(f'{header}\n')
     bolide_pvt.write(f'Power (W)    Time (sec)\n')
 
+    # power vs altitude output file
+    bolide_pva = open(f'{outputpath}/power_vs_alt.dat', 'w')
+    bolide_pva.write(f'{header}\n')
+    bolide_pva.write(f'Power (W)    Altitude (m)\n')
+
     # trajectory init (your original function — assuming it exists)
-    x, z, R, alt, v, t, theta, vx, vz, alpha, delta, gamma, phi, s,\
-    surfx, surfz = trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg)
+    (x, z, R, alt, v, t, theta, vx, vz, alpha, delta, gamma, phi, s,
+    surfx, surfz) = trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg)
 
     # initialize total radiated and deposited energy to zero
     E_rad_total = 0.0
@@ -1161,13 +1183,16 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
             # After first fragmentation → switch to weaker strength
             if frag_stage == 1:
                 current_strength = strength_secondary
-                print(f"Strength reduced to secondary value: {current_strength:.2e} Pa")
+                print(f"Material strength updated to secondary value: {current_strength:.2e} Pa")
             if frag_stage == 2:
                 current_strength = strength_tertiary
-                print(f"Strength reduced to tertiary value: {current_strength:.2e} Pa")
+                print(f"Material strength updated to tertiary value: {current_strength:.2e} Pa")
             if frag_stage == 3:
                 current_strength = strength_quaternary
-                print(f"Strength reduced to quaternary value: {current_strength:.2e} Pa")
+                print(f"Material strength updated to quaternary value: {current_strength:.2e} Pa")
+            if frag_stage > 3:
+                current_strength = 2.e7
+                print(f'Material strength updated to terminal value of {current_strength} Pa')
 
         # Luminosity (single term)
         tau        = tau_calc(v, mass, rho, rho_tau_scale, n_fragments if fragmented else 1)
@@ -1178,8 +1203,8 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
         lum_per_fragment = luminosity / n_fragments if fragmented and n_fragments > 1 else None
 
         # trajectory update (your original)
-        x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s,\
-        surfx, surfz = trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fdrag, dt, mass)
+        (x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s,
+        surfx, surfz) = trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fdrag, dt, mass)
 
         # mass / size update
         mass     = mass_update_calc(mass, dmdt, dt)
@@ -1223,6 +1248,8 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
                frag_stage, lum_per_fragment)
         
         wr_power_vs_time(bolide_pvt, luminosity, t)
+
+        wr_power_vs_alt(bolide_pva, luminosity, alt)
 
         # end conditions
         if t > tstop:
@@ -1278,6 +1305,7 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
 
     bolide_outputs.close()
     bolide_pvt.close()
+    bolide_pva.close()
 
     return (header, strength_initial, T_array, p_array, rho_array, a_array, lum_array,
             alt_array, time_array, mass_array, dia_array, area_array,
@@ -1288,19 +1316,24 @@ def bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, po
 ##############################################################
 
 # Main Program
+event_name = input('Enter event name: ')
+print(f'Event name input: {event_name}')
+inputpath  = f"{basename}{event_name}/bolum_in.dat"
+outputpath = f"{basename}{event_name}"
 
-# read inputs (updated for v7)
-(diameter, velocity, theta_deg, density, porosity,
+# read inputs
+(diameter, velocity, theta_deg,
 init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-zstart, xstart, tstart, dt, tstop, n_fragments, rho_tau_scale, n_frag_init,
-Cd, L_ablation) = rdinput(inputpath)
+density, porosity, Cd, L_ablation,
+n_fragments, n_frag_init, flare_duration, rho_tau_scale,
+zstart, xstart, tstart, dt, tstop) = rdinput(inputpath)
 
 # write out initial parameters
-write_init_params(basename, diameter, velocity, theta_deg, density, porosity,
+write_init_params(outputpath, diameter, velocity, theta_deg,
 init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-zstart, xstart, tstart, dt, tstop, n_fragments,
-rho_tau_scale, n_frag_init,
-Cd, L_ablation)
+density, porosity, Cd, L_ablation,
+n_fragments, n_frag_init, flare_duration, rho_tau_scale,
+zstart, xstart, tstart, dt, tstop)
 
 # run simulation
 (header, strength, T_array, p_array, rho_array, a_array,
@@ -1308,18 +1341,18 @@ lum_array, alt_array, time_array, mass_array, dia_array,
 area_array, frag_times, frag_alts, KE_array, v_array,
 accel_array, heatflux_array, Fdrag_array, E_rad_ttl_array,
 q_array, Mach_array, T_stag_array, p_stag_array, T_surf_array,
-peak_power, peak_rad_i, E_rad_tot, E_event) = bolide_luminosity_model(basename, diameter, velocity, theta_deg, density, porosity,
+peak_power, peak_rad_i, E_rad_tot, E_event) = bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
                                                                       init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-                                                                      zstart, xstart, tstart, dt, tstop, n_fragments,
-                                                                      rho_tau_scale, n_frag_init,
-                                                                      Cd, L_ablation)
-
+                                                                      density, porosity, Cd, L_ablation,
+                                                                      n_fragments, n_frag_init, flare_duration, rho_tau_scale,
+                                                                      zstart, xstart, tstart, dt, tstop)
+                                                             
 # end simulation and plot output
 # error checking
 print(f"total cycles:     {time_array.size}\n")
 
 print(f"STOP all done bolide simulation complete\n")
-plot_outputs(basename, header, time_array.flatten(), lum_array.flatten(), alt_array.flatten(),
+plot_outputs(outputpath, header, time_array.flatten(), lum_array.flatten(), alt_array.flatten(),
              frag_times, frag_alts, v_array.flatten(), accel_array.flatten(), q_array.flatten(),
              T_stag_array.flatten(), p_stag_array.flatten(), T_surf_array.flatten(),
              E_rad_ttl_array.flatten(), peak_power, peak_rad_i, E_rad_tot, E_event)

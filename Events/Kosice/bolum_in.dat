@@ -1,21 +1,29 @@
 Bolum Input Deck
+User must define diameter, velocity, theta_deg, and density in order for the code to run
+All other input parameters are optional
 
-diameter           = 1.3       # meters
-velocity           = 15000.0    # entry velocity in m/s (ranges from 11200 to ~70000)
-theta_deg          = 60.        # degrees from the horizontal
-init_strength      = 5.e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
-strength_secondary = 1.e6       # material strength of secondary fragments
-density            = 3400.0     # kg/m^3
-porosity           = 0.15       # 0 to 1
-Cd                 = 0.7
-L_ablation         = 5.e6
-altstart           = 90000.     # meters
-xstart             = 0.         # keep at zero (for 2-D trajectory)
-tstart             = 0.0        # start time in seconds
-dt                 = 0.003      # timestep in seconds
-tstop              = 20.0       # stop time in seconds
-n_fragments        = 20.        # number of fragments
-rho_tau_scale      = 0.         # lum eff scaling factor (for large bolides only, set = 0 otherwise)
+diameter            = 1.3        # meters
+velocity            = 15000.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+theta_deg           = 60.        # degrees from the horizontal
+
+init_strength       = 5.e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+strength_secondary  = 1.e6      # material strength of secondary fragments
+strength_tertiary   = 2.e6      # material strength of tertiary fragments
+strength_quaternary = 3.e6       # material strength of quaternary fragments
+
+density             = 3400.0     # kg/m^3
+porosity            = 0.15       # 0 to 1
+Cd                  = 0.7        # drag coefficient (0.5 to 1.5) bigger Cd = larger drag force
+L_ablation          = 5.e6       # heat of ablation (J/kg) (1.e6 to 1.e7)  bigger L_ablation = smaller dmdt
+n_fragments         = 4.         # number of fragments
+flare_duration      = 0.3        # duration of flare after fragmentation
+rho_tau_scale       = 0          # luminous efficiency scaling factor (0 for small bolides, 1 for large bolides)
+
+zstart              = 90000.    # meters
+xstart              = 0.         # keep at zero (for 2-D trajectory)
+tstart              = 0.0        # start time in seconds
+dt                  = 0.003      # timestep in seconds
+tstop               = 60.0       # stop time in seconds
 
 
 Kosice (2013)

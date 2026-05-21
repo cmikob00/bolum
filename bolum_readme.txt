@@ -5,6 +5,8 @@ Bolum Readme
    Only required inputs now are: diameter, velocity, theta_deg, init_strength, and density.
    Uses a dictionary now to handle input read-in.  Much more efficient.
    Added power vs altitude output file.
+   Added Earth radius outputs.
+   Added luminous efficiency vs time and altitude plotting.
    
    Still need to implement fragmentation model with non-equal masses per fragment.
 

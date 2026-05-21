@@ -3,7 +3,7 @@
 # Author: C.J. Miko                                                   #
 # Instructions: Modify inputs in the input deck (bolum_in.) and run   #
 # Please see available readme for additional information              #
-# Total line count: 1358 lines                                        #
+# Total line count: 1396 lines                                        #
 # This code is UNCLASSIFIED                                           #
 #######################################################################
 
@@ -170,7 +170,7 @@ def wr_out(bolide_outputs, luminosity, y, t, mass, diameter, area, KE, v, acc, q
 
     bolide_outputs.write(f"time = {t:.4e}       lum = {luminosity:.4e}     tau = {tau:.4e}   dia = {diameter:.4e}    alt = {y:.4e}\n")
     bolide_outputs.write(f"E_rad_ttl = {E_rad_total:.4e}  E_dep = {E_deposited:.4e}   KE = {KE:.4e}    Fdrag = {Fdrag:.4e}  frag_stage = {frag_stage}\n")
-    bolide_outputs.write(f"v = {v:.4e}          acc = {acc:.4e}     theta_deg = {theta_deg:.3f}  mass = {mass:.4e}   area = {area:.4e}\n")
+    bolide_outputs.write(f"v = {v:.4e}          acc = {acc:.4e}     theta_deg = {theta_deg:.3f} mass = {mass:.4e}   area = {area:.4e}\n")
     bolide_outputs.write(f"T_stag = {T_stag:.4e}     T_surf = {T_surf:.4e}  q_h = {q_h:.4e}   q = {q:.4e}      p_stag = {p_stag:.4e}\n")
     bolide_outputs.write(f"T = {T:.4e}          p = {p:.4e}       rho = {rho:.4e}   a = {a:.4e}      M = {M:.4e}\n\n")
     if lum_per_fragment is not None:
@@ -187,7 +187,7 @@ def wr_power_vs_alt(bolide_pva, luminosity, alt):
     bolide_pva.write(f'{luminosity:.4e}   {alt:.4e}\n')
 
 # plotting function — simplified to single luminosity
-def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, velocities, accels, qs,
+def plot_outputs(basename, header, times, taus, lums, alts, frag_times, frag_alts, velocities, accels, qs,
                  T_stags, p_stags, T_surfs, E_rad_totals, peak_power, peak_rad_i, E_rad_tot, E_event):
 
     owtname = basename + f'/bolide_plots.pdf'
@@ -317,7 +317,7 @@ def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, vel
     xmax = 2. * peak_power
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
-    plt.plot(lums, alts / 1000., color='blue', label='Luminosity per Altitude')
+    plt.plot(lums, alts / 1000., color='blue', label='Luminosity vs Altitude')
     plt.xscale('linear')
     plt.xlabel('Luminosity (Watts)')
     plt.ylabel('Altitude (km)')
@@ -346,7 +346,7 @@ def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, vel
     xmax = 2. * peak_rad_i
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
-    plt.plot(radiant_intensities, alts / 1000., color='blue', label='Total Rad I')
+    plt.plot(radiant_intensities, alts / 1000., color='blue', label='Rad I vs Altitude')
     plt.xscale('linear')
     plt.xlabel('Radiant Intensity (W/sr)')
     plt.ylabel('Altitude (km)')
@@ -498,16 +498,49 @@ def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, vel
     plt.ylabel('Surface Temperature (K)')
     plt.gcf().text(.20, .89, header, fontsize=10, color='black')
     if frag_times:
-        plt.axvline(frag_times[0], linestyle='--', color='green', alpha=0.6)
-        plt.gcf().text(.14, .86, f"Frag at {frag_alts[0]/1000.:.1f} km", fontsize=9, color='green')
+        plt.axvline(frag_times[0], linestyle='--', color='green', alpha=0.6, label=f"Frag at {frag_alts[0]/1000.:.1f} km and {frag_times[0]:.2f} sec")
     plt.title(f'Bolide Surface Temperature vs Time\n')
     plt.grid(True)
     plt.gcf().text(.10, .95, 'UNCLASSIFIED', fontsize=10, color='green')
     plt.gcf().text(.80, .05, 'UNCLASSIFIED', fontsize=10, color='green')
     pdf_pages.savefig(fig14)
 
-    # total radiated energy vs time
+    # luminous efficiency (tau) vs time
     fig15 = plt.figure(figsize=(9.0, 6.5))
+    plt.plot(times, taus, label=f'τ vs time')
+    plt.xscale('linear')
+    plt.yscale('linear')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Luminous Efficiency (τ)')
+    plt.gcf().text(.20, .89, header, fontsize=10, color='black')
+    if frag_times:
+        plt.axvline(frag_times[0], linestyle='--', color='green', alpha=0.6, label=f"Frag at {frag_alts[0]/1000.:.1f} km and {frag_times[0]:.2f} sec")
+    plt.title(f'Bolide Luminous Efficiency vs Time\n')
+    plt.grid(True)
+    plt.legend(loc='upper left')
+    plt.gcf().text(.10, .95, 'UNCLASSIFIED', fontsize=10, color='green')
+    plt.gcf().text(.80, .05, 'UNCLASSIFIED', fontsize=10, color='green')
+    pdf_pages.savefig(fig15)
+
+    # luminous efficiency (tau) vs altitude
+    fig16 = plt.figure(figsize=(9.0, 6.5))
+    plt.plot(taus, alts / 1000., label=f'τ vs Altitude')
+    plt.xscale('linear')
+    plt.yscale('linear')
+    plt.xlabel('Luminous Efficiency (τ)')
+    plt.ylabel('Altitude (km)')
+    plt.gcf().text(.20, .89, header, fontsize=10, color='black')
+    if frag_alts:
+        plt.axhline(frag_alts[0] / 1000., linestyle='--', color='green', alpha=0.6, label=f"Frag at {frag_alts[0]/1000.:.1f} km and {frag_times[0]:.2f} sec")
+    plt.title(f'Bolide Luminous Efficiency vs Altitude\n')
+    plt.grid(True)
+    plt.legend(loc='upper right')
+    plt.gcf().text(.10, .95, 'UNCLASSIFIED', fontsize=10, color='green')
+    plt.gcf().text(.80, .05, 'UNCLASSIFIED', fontsize=10, color='green')
+    pdf_pages.savefig(fig16)
+
+    # total radiated energy vs time
+    fig17 = plt.figure(figsize=(9.0, 6.5))
     plt.plot(times, E_rad_totals)
     plt.xscale('linear')
     plt.yscale('linear')
@@ -521,7 +554,7 @@ def plot_outputs(basename, header, times, lums, alts, frag_times, frag_alts, vel
     plt.grid(True)
     plt.gcf().text(.10, .95, 'UNCLASSIFIED', fontsize=10, color='green')
     plt.gcf().text(.80, .05, 'UNCLASSIFIED', fontsize=10, color='green')
-    pdf_pages.savefig(fig15)
+    pdf_pages.savefig(fig17)
 
     pdf_pages.close()
 
@@ -677,10 +710,12 @@ def trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg)
     # Earth surface calcs
     surfx = R_Earth * math.cos((pi / 2.) - alpha)
     surfz = R_Earth * math.sin((pi / 2.) - alpha)
+    R_E = (surfx**2. + surfz**2.)**0.5
     bolide_outputs.write(f"Initial Earth surface x-comp = {surfz:.4e} meters\n")
-    bolide_outputs.write(f"Initial Earth surface z-comp = {surfz:.4e} meters\n\n")
+    bolide_outputs.write(f"Initial Earth surface z-comp = {surfz:.4e} meters\n")
+    bolide_outputs.write(f"Earth Radius                 = {R_E:.4e} meters\n\n")
 
-    return x, z, R, alt, v, t, theta, vx, vz, alpha, delta, gamma, phi, s, surfx, surfz
+    return x, z, R, alt, v, t, theta, vx, vz, alpha, delta, gamma, phi, s, surfx, surfz, R_E
 
 # function to update bolide trajectory quantities
 def trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fdrag, dt, m):
@@ -792,12 +827,12 @@ def trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fd
     # Earth surface calcs
     surfx = R_Earth * math.cos((pi / 2.) - alpha)
     surfz = R_Earth * math.sin((pi / 2.) - alpha)
-    R_E = (surfx**2. + surfz**2.)**0.5
+    R_E   = (surfx**2. + surfz**2.)**0.5
     # print(f"surfx = {surfx} m")
     # print(f"surfz = {surfz} m")
     # print(f"Radius of Earth = {R_E} m")
 
-    return x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s, surfx, surfz
+    return x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s, surfx, surfz, R_E
 
 # estimate compressive strength based on density and porosity
 def compute_strength(init_strength, porosity):
@@ -1124,7 +1159,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
 
     # trajectory init (your original function — assuming it exists)
     (x, z, R, alt, v, t, theta, vx, vz, alpha, delta, gamma, phi, s,
-    surfx, surfz) = trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg)
+    surfx, surfz, R_E) = trajectory_init(bolide_outputs, xstart, zstart, velocity, tstart, theta_deg)
 
     # initialize total radiated and deposited energy to zero
     E_rad_total = 0.0
@@ -1137,6 +1172,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
     p_array           = np.zeros(1)
     rho_array         = np.zeros(1)
     a_array           = np.zeros(1)
+    tau_array         = np.zeros(1)
     lum_array         = np.zeros(1)
     alt_array         = np.zeros(1)
     time_array        = np.zeros(1)
@@ -1204,7 +1240,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
 
         # trajectory update (your original)
         (x, z, R, alt, v, theta, vx, vz, acc, alpha, delta, gamma, phi, s,
-        surfx, surfz) = trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fdrag, dt, mass)
+        surfx, surfz, R_E) = trajectory_update(x, z, R, v, theta, vx, vz, alpha, delta, gamma, phi, s, Fdrag, dt, mass)
 
         # mass / size update
         mass     = mass_update_calc(mass, dmdt, dt)
@@ -1215,11 +1251,12 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
         E_rad_total = E_rad_total_calc(E_rad_total, luminosity, dt)
         E_deposited = E_deposited_calc(E_deposited, Fdrag, v, dmdt, dt)
 
-        # store to arrays (your original indexing)
+        # store to arrays
         T_array[timestep-1]           = T
         p_array[timestep-1]           = p
         rho_array[timestep-1]         = rho
         a_array[timestep-1]           = a
+        tau_array[timestep-1]         = tau
         lum_array[timestep-1]         = luminosity
         alt_array[timestep-1]         = alt
         time_array[timestep-1]        = t
@@ -1270,6 +1307,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
         p_array           = np.vstack([p_array, new_row])
         rho_array         = np.vstack([rho_array, new_row])
         a_array           = np.vstack([a_array, new_row])
+        tau_array         = np.vstack([tau_array, new_row])
         lum_array         = np.vstack([lum_array, new_row])
         alt_array         = np.vstack([alt_array, new_row])
         time_array        = np.vstack([time_array, new_row]) 
@@ -1307,8 +1345,8 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
     bolide_pvt.close()
     bolide_pva.close()
 
-    return (header, strength_initial, T_array, p_array, rho_array, a_array, lum_array,
-            alt_array, time_array, mass_array, dia_array, area_array,
+    return (header, strength_initial, T_array, p_array, rho_array, a_array, tau_array,
+            lum_array, alt_array, time_array, mass_array, dia_array, area_array,
             frag_times, frag_alts, KE_array, v_array, accel_array, heatflux_array,
             Fdrag_array, E_rad_ttl_array, q_array, Mach_array, T_stag_array,
             p_stag_array, T_surf_array, peak_power, peak_rad_i, E_rad_total, E_event)
@@ -1337,9 +1375,9 @@ zstart, xstart, tstart, dt, tstop)
 
 # run simulation
 (header, strength, T_array, p_array, rho_array, a_array,
-lum_array, alt_array, time_array, mass_array, dia_array,
-area_array, frag_times, frag_alts, KE_array, v_array,
-accel_array, heatflux_array, Fdrag_array, E_rad_ttl_array,
+tau_array, lum_array, alt_array, time_array, mass_array,
+dia_array, area_array, frag_times, frag_alts, KE_array,
+v_array, accel_array, heatflux_array, Fdrag_array, E_rad_ttl_array,
 q_array, Mach_array, T_stag_array, p_stag_array, T_surf_array,
 peak_power, peak_rad_i, E_rad_tot, E_event) = bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
                                                                       init_strength, strength_secondary, strength_tertiary, strength_quaternary,
@@ -1352,7 +1390,7 @@ peak_power, peak_rad_i, E_rad_tot, E_event) = bolide_luminosity_model(outputpath
 print(f"total cycles:     {time_array.size}\n")
 
 print(f"STOP all done bolide simulation complete\n")
-plot_outputs(outputpath, header, time_array.flatten(), lum_array.flatten(), alt_array.flatten(),
-             frag_times, frag_alts, v_array.flatten(), accel_array.flatten(), q_array.flatten(),
-             T_stag_array.flatten(), p_stag_array.flatten(), T_surf_array.flatten(),
+plot_outputs(outputpath, header, time_array.flatten(), tau_array.flatten(), lum_array.flatten(),
+             alt_array.flatten(),frag_times, frag_alts, v_array.flatten(), accel_array.flatten(), 
+             q_array.flatten(), T_stag_array.flatten(), p_stag_array.flatten(), T_surf_array.flatten(),
              E_rad_ttl_array.flatten(), peak_power, peak_rad_i, E_rad_tot, E_event)

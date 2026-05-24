@@ -27,7 +27,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
     mass = mass_init_calc(diameter, density)
 
     # compute initial material strength of bolide
-    strength_initial = compute_strength(init_strength, porosity)
+    strength_initial = compute_strength(init_strength, porosity, density)
     current_strength = strength_initial
 
     # initialize fragmentation model

@@ -3,10 +3,9 @@ bolum physics model file
 '''
 
 from bolum.constants import *
-from bolum.io import density
 
 # estimate compressive strength based on density and porosity
-def compute_strength(init_strength, porosity):
+def compute_strength(init_strength, porosity, density):
 
     if init_strength > 0:
         # use input material strength in Pa

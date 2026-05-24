@@ -10,4 +10,4 @@ __author__ = "C.J. Miko"
 
 from .core import bolide_luminosity_model
 
-__all__ = ["bolide_luminosity_model"]
+__all__ = ["bolide_luminosity_model", "__version__", "__author__"]

@@ -2,7 +2,6 @@
 bolum core file
 '''
 
-import numpy as np
 from bolum.constants import *
 from bolum.io import *
 from bolum.physics import *

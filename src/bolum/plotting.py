@@ -1,6 +1,7 @@
 '''
 bolum plotting file
 '''
+
 from bolum.constants import *
 
 # plotting function — simplified to single luminosity

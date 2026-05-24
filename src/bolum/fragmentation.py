@@ -4,6 +4,7 @@ bolum fragmentation model file
 
 from bolum.constants import *
 
+# Main fragmentation model
 def frag_attempt(bolide_outputs, alt, t, frag_stage, frag_times, frag_alts,
                  current_strength, n_fragments, density, mass, area, q,
                  flare_end_time, flare_duration):

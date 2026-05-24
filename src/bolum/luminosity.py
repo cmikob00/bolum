@@ -4,6 +4,7 @@ bolum luminosity calculations file
 
 from bolum.constants import *
 
+# function to calculate bolide lumonous efficiency
 def tau_calc(v, mass, rho, rho_tau_scale, n_fragments):
 
     # This luminous efficiency function is designed to output

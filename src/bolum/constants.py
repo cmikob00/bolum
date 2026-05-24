@@ -3,9 +3,6 @@ bolum constants file
 '''
 
 import math
-import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
 # Constants
 pi       = math.pi

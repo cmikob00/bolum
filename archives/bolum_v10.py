@@ -39,7 +39,7 @@ L          = 0.0065   # temperature lapse rate of atmosphere
 
 # bolide constants
 epsilon           = 0.9    # emissivity of bolide
-flare_duration    = 0.1   # flare duration after fragmentation in sec
+flare_duration    = 0.1    # flare duration after fragmentation in sec
 
 # other simulation parameters
 mxcycl  = 100000           # maximum number of cycles
@@ -90,20 +90,20 @@ def rdinput(inputpath):
     #
     # OPTIONAL PARAMETERS WITH DEFAULTS
     #
-    strength_secondary  = params.get("strength_secondary", 1.e15)
-    strength_tertiary   = params.get("strength_tertiary", 1.e15)
-    strength_quaternary = params.get("strength_quaternary", 1.e15)
+    strength_secondary  = params.get("strength_secondary", 1.e7)
+    strength_tertiary   = params.get("strength_tertiary", 2.e7)
+    strength_quaternary = params.get("strength_quaternary", 3.e7)
     porosity            = params.get("porosity", 0.1)
     Cd                  = params.get("Cd", 1.0)
     L_ablation          = params.get("L_ablation", 5.e6)
-    n_fragments         = params.get("n_fragments", 50)
+    n_fragments         = params.get("n_fragments", 3)
     flare_duration      = params.get("flare_duration", 0.1)
     rho_tau_scale       = params.get("rho_tau_scale", 0.0)
     zstart              = params.get("zstart", 100000.0)
     xstart              = params.get("xstart", 0.0)
     tstart              = params.get("tstart", 0.0)
     dt                  = params.get("dt", 0.003)
-    tstop               = params.get("tstop", 1.0)
+    tstop               = params.get("tstop", 60.0)
 
     n_frag_init = n_fragments
 
@@ -154,7 +154,7 @@ def write_init_params(outputpath, diameter, velocity, theta_deg,
     init_params.write(f"Number of Fragments per stage:     {n_fragments}\n")
     init_params.write(f"Initially set number of fragments: {n_frag_init}\n")
     init_params.write(f"Flare Duration (sec):              {flare_duration:.3f}\n")
-    init_params.write(f"Luminous Efficiency scaling term:  {rho_tau_scale:.1f}\n")
+    init_params.write(f"Luminous Efficiency scaling term:  {rho_tau_scale}\n")
     init_params.write(f"Initial Altitude (m):              {zstart:.3f}\n")
     init_params.write(f"Initial Position (m):              {xstart:.3f}\n")
     init_params.write(f"Starting Time (s):                 {tstart:.3f}\n")
@@ -164,11 +164,11 @@ def write_init_params(outputpath, diameter, velocity, theta_deg,
     init_params.close()
 
 # define general output file
-def wr_out(bolide_outputs, luminosity, y, t, mass, diameter, area, KE, v, acc, q_h, Fdrag,
+def wr_out(bolide_outputs, luminosity, alt, t, mass, diameter, area, KE, v, acc, q_h, Fdrag,
            E_rad_total, E_deposited, q, M, T_stag, p_stag, T_surf, T, p, rho, a, theta_deg, tau,
            frag_stage, lum_per_fragment):
 
-    bolide_outputs.write(f"time = {t:.4e}       lum = {luminosity:.4e}     tau = {tau:.4e}   dia = {diameter:.4e}    alt = {y:.4e}\n")
+    bolide_outputs.write(f"time = {t:.4e}       lum = {luminosity:.4e}     tau = {tau:.4e}   dia = {diameter:.4e}    alt = {alt:.4e}\n")
     bolide_outputs.write(f"E_rad_ttl = {E_rad_total:.4e}  E_dep = {E_deposited:.4e}   KE = {KE:.4e}    Fdrag = {Fdrag:.4e}  frag_stage = {frag_stage}\n")
     bolide_outputs.write(f"v = {v:.4e}          acc = {acc:.4e}     theta_deg = {theta_deg:.3f} mass = {mass:.4e}   area = {area:.4e}\n")
     bolide_outputs.write(f"T_stag = {T_stag:.4e}     T_surf = {T_surf:.4e}  q_h = {q_h:.4e}   q = {q:.4e}      p_stag = {p_stag:.4e}\n")
@@ -1227,7 +1227,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
                 current_strength = strength_quaternary
                 print(f"Material strength updated to quaternary value: {current_strength:.2e} Pa")
             if frag_stage > 3:
-                current_strength = 2.e7
+                current_strength = 3.e7
                 print(f'Material strength updated to terminal value of {current_strength} Pa')
 
         # Luminosity (single term)
@@ -1280,7 +1280,7 @@ def bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
         t = t + dt
 
         # write outputs
-        wr_out(bolide_outputs, luminosity, z, t, mass, diameter, area, KE, v, acc, q_h, Fdrag,
+        wr_out(bolide_outputs, luminosity, alt, t, mass, diameter, area, KE, v, acc, q_h, Fdrag,
                E_rad_total, E_deposited, q, M, T_stag, p_stag, T_surf, T, p, rho, a, theta_deg, tau,
                frag_stage, lum_per_fragment)
         

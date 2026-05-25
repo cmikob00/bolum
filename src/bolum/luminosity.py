@@ -1,5 +1,5 @@
 '''
-bolum luminosity calculations file
+Bolum luminosity calculations file
 '''
 
 from bolum.constants import *

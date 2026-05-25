@@ -1,13 +1,30 @@
 '''
-bolum plotting file
+Bolum plotting file
 '''
 
 from bolum.constants import *
 
 # plotting function — simplified to single luminosity
-def plot_outputs(basename, header, times, taus, lums, alts, frag_times, frag_alts,
-                 velocities, accels, qs, T_stags, p_stags, T_surfs, init_strength,
-                 E_rad_totals, peak_power, peak_rad_i, E_rad_tot, E_event):
+def plot_outputs(basename,
+                 header,
+                 times,
+                 taus,
+                 lums,
+                 alts,
+                 frag_times,
+                 frag_alts,
+                 velocities,
+                 accels,
+                 qs,
+                 T_stags,
+                 p_stags,
+                 T_surfs,
+                 init_strength,
+                 E_rad_totals,
+                 peak_power,
+                 peak_rad_i,
+                 E_rad_tot,
+                 E_event):
 
     owtname = basename + f'/bolide_plots.pdf'
     pdf_pages = PdfPages(owtname)

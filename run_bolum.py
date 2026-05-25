@@ -36,24 +36,57 @@ if __name__ == "__main__":
     zstart, xstart, tstart, dt, tstop)
 
     # run simulation
-    (header, strength, T_array, p_array, rho_array, a_array,
-    tau_array, lum_array, alt_array, time_array, mass_array,
-    dia_array, area_array, frag_times, frag_alts, KE_array,
-    v_array, accel_array, heatflux_array, Fdrag_array, E_rad_ttl_array,
-    q_array, Mach_array, T_stag_array, p_stag_array, T_surf_array,
-    peak_power, peak_rad_i, E_rad_tot, E_event) = bolide_luminosity_model(outputpath, diameter, velocity, theta_deg,
-                                                                        init_strength, strength_secondary, strength_tertiary, strength_quaternary,
-                                                                        density, porosity, Cd, L_ablation,
-                                                                        n_fragments, n_frag_init, flare_duration, rho_tau_scale,
-                                                                        zstart, xstart, tstart, dt, tstop)
+    (header, strength, T_array, p_array,
+    rho_array, a_array, tau_array, lum_array,
+    alt_array, time_array, mass_array, dia_array,
+    area_array, frag_times, frag_alts, KE_array,
+    v_array, accel_array, heatflux_array, Fdrag_array,
+    E_rad_ttl_array, q_array, Mach_array, T_stag_array,
+    p_stag_array, T_surf_array, peak_power, peak_rad_i,
+    E_rad_tot, E_event) = bolide_luminosity_model(outputpath,
+                                                  diameter,
+                                                  velocity,
+                                                  theta_deg,
+                                                  init_strength,
+                                                  strength_secondary,
+                                                  strength_tertiary,
+                                                  strength_quaternary,
+                                                  density,
+                                                  porosity,
+                                                  Cd,
+                                                  L_ablation,
+                                                  n_fragments,
+                                                  n_frag_init,
+                                                  flare_duration,
+                                                  rho_tau_scale,
+                                                  zstart,
+                                                  xstart,
+                                                  tstart,
+                                                  dt,
+                                                  tstop)
                                                                 
     # end simulation and plot output
-    # error checking
+    # error checking first
     print(f"total cycles:     {time_array.size}\n")
 
     print(f"STOP all done bolide simulation complete\n")
-    plot_outputs(outputpath, header, time_array.flatten(), tau_array.flatten(), lum_array.flatten(),
-                alt_array.flatten(),frag_times, frag_alts, v_array.flatten(), accel_array.flatten(), 
-                q_array.flatten(), T_stag_array.flatten(), p_stag_array.flatten(), T_surf_array.flatten(),
-                init_strength,
-                E_rad_ttl_array.flatten(), peak_power, peak_rad_i, E_rad_tot, E_event)
+    plot_outputs(outputpath,
+                 header,
+                 time_array.flatten(),
+                 tau_array.flatten(),
+                 lum_array.flatten(),
+                 alt_array.flatten(),
+                 frag_times,
+                 frag_alts,
+                 v_array.flatten(),
+                 accel_array.flatten(), 
+                 q_array.flatten(),
+                 T_stag_array.flatten(),
+                 p_stag_array.flatten(),
+                 T_surf_array.flatten(),
+                 init_strength,
+                 E_rad_ttl_array.flatten(),
+                 peak_power,
+                 peak_rad_i,
+                 E_rad_tot,
+                 E_event)

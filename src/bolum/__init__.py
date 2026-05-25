@@ -1,11 +1,11 @@
 '''
-Bolide Luminosity and Fragmentation Model
-Version 10
+Bolide Luminosity and Fragmentation Model (Bolum)
+Version 11
 Author: C.J. Miko
 This code is UNCLASSIFIED
 '''
 
-__version__ = "10.0.0"
+__version__ = "11.0.0"
 __author__ = "C.J. Miko"
 
 from .core import bolide_luminosity_model

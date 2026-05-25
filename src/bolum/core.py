@@ -1,5 +1,5 @@
 '''
-bolum core file
+Bolum core file
 '''
 
 from bolum.constants import *

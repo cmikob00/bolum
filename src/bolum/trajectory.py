@@ -1,5 +1,5 @@
 '''
-bolum trajectory model file
+Bolum trajectory model file
 '''
 
 from bolum.constants import *

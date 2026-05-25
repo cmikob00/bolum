@@ -1,5 +1,5 @@
 '''
-bolum I/O file
+Bolum I/O file
 '''
 
 # reading in input deck

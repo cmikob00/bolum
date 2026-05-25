@@ -1,5 +1,5 @@
 '''
-bolum constants file
+Bolum constants file
 '''
 
 import math

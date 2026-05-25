@@ -1,4 +1,35 @@
-Bolum Readme
+Bolum Changelog
+
+   May 2026 - v11:
+   Professionalized code into the following structure:
+   bolum
+   |_ src
+   |  |_ bolum
+   |     |_ __init__.py
+   |     |_ __pycache__
+   |     |_ constants.py
+   |     |_ core.py
+   |     |_ fragmentation.py
+   |     |_ io.py
+   |     |_ luminosity.py
+   |     |_ physics.py
+   |     |_ plotting.py
+   |     |_ trajectory.py
+   |_ run_bolum.py
+   |_ Events
+   |_ archives
+   |_ bolum_changelog.txt
+   |_ bolum_in.dat
+   |_ requirements.txt
+   |_ .git
+   |_ .gitignore
+   |_ .venv
+
+   Each module performs the function(s) denoted by its name.
+   Having the full code in separate modules makes management
+   and updates more straightforward.
+
+######################
 
    May 2026 - v10:
    Changed read-in function rdinput to use default values if not found in input deck.

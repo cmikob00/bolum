@@ -1,5 +1,5 @@
 '''
-bolum physics model file
+Bolum physics model file
 '''
 
 from bolum.constants import *

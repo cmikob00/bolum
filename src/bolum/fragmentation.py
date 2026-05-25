@@ -1,5 +1,5 @@
 '''
-bolum fragmentation model file
+Bolum fragmentation model file
 '''
 
 from bolum.constants import *

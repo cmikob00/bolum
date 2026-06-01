@@ -2,21 +2,21 @@ Bolum Input Deck
 User must define diameter, velocity, theta_deg, and density in order for the code to run
 All other input parameters are optional
 
-diameter            = 1.8         # meters
-velocity            = 17500.0    # entry velocity in m/s (ranges from 11200 to ~70000)
-theta_deg           = 31.9        # degrees from the horizontal
+diameter            = 1.1         # meters
+velocity            = 33500.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+theta_deg           = 20.        # degrees from the horizontal
 
-init_strength       = 2.5e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
-strength_secondary  = 3.5e5      # material strength of secondary fragments
-strength_tertiary   = 2.e6      # material strength of tertiary fragments
-strength_quaternary = 4.e6       # material strength of quaternary fragments
+init_strength       = 1.e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+strength_secondary  = 7.e6      # material strength of secondary fragments
+strength_tertiary   = 8.e6      # material strength of tertiary fragments
+strength_quaternary = 9.e6       # material strength of quaternary fragments
 
 density             = 3300.0     # kg/m^3
 porosity            = 0.10       # 0 to 1
-Cd                  = 0.7        # drag coefficient (0.5 to 1.5) bigger Cd = larger drag force
+Cd                  = 0.6        # drag coefficient (0.5 to 1.5) bigger Cd = larger drag force
 L_ablation          = 1.e7       # heat of ablation (J/kg) (1.e6 to 1.e7)  bigger L_ablation = smaller dmdt
 n_fragments         = 2.         # number of fragments
-flare_duration      = 0.3        # duration of flare after fragmentation
+flare_duration      = 0.1        # duration of flare after fragmentation
 rho_tau_scale       = 0          # luminous efficiency scaling factor (0 for small bolides, 1 for large bolides)
 
 zstart              = 80000.    # meters

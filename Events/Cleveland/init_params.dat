@@ -3,7 +3,7 @@ Diameter (m):                      1.800
 velocity (m/s):                    17500.000
 Entry Angle to Horizon (deg):      31.900
 Initial Strength (Pa):             2.500e+05
-Secondary Strength (Pa):           3.500e+05
+Secondary Strength (Pa):           1.000e+06
 Tertiary Strength (Pa):            2.000e+06
 Quaternary Strength (Pa):          4.000e+06
 Density (kg/m^3):                  3300.000

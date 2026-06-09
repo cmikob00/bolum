@@ -2,7 +2,7 @@ Initialization Parameters for Bolide Luminosity and Fragmentation Simulation
 Diameter (m):                      1.800
 velocity (m/s):                    17500.000
 Entry Angle to Horizon (deg):      31.900
-Initial Strength (Pa):             2.500e+05
+Initial Strength (Pa):             3.000e+05
 Secondary Strength (Pa):           1.000e+06
 Tertiary Strength (Pa):            2.000e+06
 Quaternary Strength (Pa):          4.000e+06
@@ -14,7 +14,7 @@ Number of Fragments per stage:     2.0
 Initially set number of fragments: 2.0
 Flare Duration (sec):              0.300
 Luminous Efficiency scaling term:  0.0
-Initial Altitude (m):              80000.000
+Initial Altitude (m):              100000.000
 Initial Position (m):              0.000
 Starting Time (s):                 0.000
 Timestep (s):                      0.003

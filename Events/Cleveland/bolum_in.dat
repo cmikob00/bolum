@@ -6,7 +6,7 @@ diameter            = 1.8         # meters
 velocity            = 17500.0    # entry velocity in m/s (ranges from 11200 to ~70000)
 theta_deg           = 31.9        # degrees from the horizontal
 
-init_strength       = 2.5e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+init_strength       = 3.e5       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
 strength_secondary  = 1.e6      # material strength of secondary fragments
 strength_tertiary   = 2.e6      # material strength of tertiary fragments
 strength_quaternary = 4.e6       # material strength of quaternary fragments
@@ -19,7 +19,7 @@ n_fragments         = 2.         # number of fragments
 flare_duration      = 0.3        # duration of flare after fragmentation
 rho_tau_scale       = 0          # luminous efficiency scaling factor (0 for small bolides, 1 for large bolides)
 
-zstart              = 80000.    # meters
+zstart              = 100000.    # meters
 xstart              = 0.         # keep at zero (for 2-D trajectory)
 tstart              = 0.0        # start time in seconds
 dt                  = 0.003      # timestep in seconds

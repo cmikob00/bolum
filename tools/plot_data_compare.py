@@ -57,10 +57,10 @@ P_broadband_sr = bolide_df['broadband_power_W_sr'].values   # W/sr (isotropic as
 # GLM data: assume CSV with ['time_s', 'joules_per_sample']
 glm_df = pd.read_csv('glm_lightcurve.csv')   # ← CHANGE
 t_glm = glm_df['time_s'].values
-E_glm = glm_df['joules_per_sample'].values   # Joules received at aperture per ~2-3 ms sample
+E_glm = glm_df['joules_per_sample'].values   # Joules received at aperture per ~2 ms sample
 
 # ========================== CONVERSIONS ==========================
-dt_glm = np.median(np.diff(t_glm))          # should be ~0.002–0.003 s
+dt_glm = np.median(np.diff(t_glm))          # should be ~0.002 s
 P_glm_received = E_glm / dt_glm             # Watts received at aperture
 
 # Irradiance at GLM (W/m²)

@@ -1,0 +1,400 @@
+{
+  "_id": "69bc80ae9b4db31b9b409b6f",
+  "status": "PUBLISHED",
+  "datetime": 1773757144633,
+  "dayTime": 1773705600000,
+  "name": "",
+  "description": "",
+  "latitude": -35.467193603515625,
+  "longitude": -75.16558074951172,
+  "latitudeDelta": 0,
+  "longitudeDelta": 0,
+  "lastModifiedBy": "auto",
+  "lastModifiedDate": "2026-04-03T06:00:20.639Z",
+  "createdBy": "auto",
+  "createdDate": "2026-03-19T16:03:10.912Z",
+  "submittedBy": "",
+  "submittedDate": null,
+  "publishedBy": "auto",
+  "publishedDate": "2026-04-03T06:00:20.639Z",
+  "detectedBy": "GLM-19",
+  "howFound": {
+    "GLM-19": [
+      "forest"
+    ]
+  },
+  "groundTrack": {
+    "GLM-19": {
+      "category": "Single-Pixel",
+      "value": 0
+    }
+  },
+  "confidenceRating": "auto",
+  "lightcurveStructure": "",
+  "nearbyLightningActivity": "",
+  "otherDetectingSources": "",
+  "otherInformation": "",
+  "humanClassification": "",
+  "reason": "",
+  "rejectedBy": "",
+  "rejectedDate": null,
+  "duration": 0.055695,
+  "beginningAltitude": "",
+  "brightness": {
+    "GLM-19": {
+      "category": "Faint",
+      "value": 2.931127020787405e-14
+    }
+  },
+  "attachments": [
+    {
+      "location": {
+        "coordinates": [
+          -75.16629028320312,
+          -35.46742248535156
+        ],
+        "type": "Point"
+      },
+      "geoData": [
+        {
+          "location": {
+            "coordinates": [
+              -75.16629028320312,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144605
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16622924804688,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 7.850899572171854e-16,
+          "time": 1773757144607
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16605377197266,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 9.850659657344532e-16,
+          "time": 1773757144613
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.1659927368164,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144615
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16593170166016,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144617
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16587829589844,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 7.850899572171854e-16,
+          "time": 1773757144619
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16575622558594,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144623
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16569519042969,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144625
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16564178466797,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.2850298726312364e-15,
+          "time": 1773757144627
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16558074951172,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.1850418683726025e-15,
+          "time": 1773757144629
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16551971435547,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144631
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16545867919922,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.2850298726312364e-15,
+          "time": 1773757144633
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.1654052734375,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.784969893924406e-15,
+          "time": 1773757144635
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16534423828125,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.4850058811485042e-15,
+          "time": 1773757144637
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.165283203125,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.4850058811485042e-15,
+          "time": 1773757144639
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16522979736328,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.3850178768898703e-15,
+          "time": 1773757144641
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16516876220703,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.3850178768898703e-15,
+          "time": 1773757144643
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16510772705078,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144645
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16504669189453,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144647
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16499328613281,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144649
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16492462158203,
+              -35.46742248535156
+            ],
+            "type": "Point"
+          },
+          "energy": 1.2850298726312364e-15,
+          "time": 1773757144650
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.1664047241211,
+              -35.467464447021484
+            ],
+            "type": "Point"
+          },
+          "energy": 1.3850178768898703e-15,
+          "time": 1773757144653
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16634368896484,
+              -35.467464447021484
+            ],
+            "type": "Point"
+          },
+          "energy": 9.850659657344532e-16,
+          "time": 1773757144655
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16629028320312,
+              -35.467464447021484
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144657
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16622924804688,
+              -35.467464447021484
+            ],
+            "type": "Point"
+          },
+          "energy": 1.085053969993087e-15,
+          "time": 1773757144658
+        },
+        {
+          "location": {
+            "coordinates": [
+              -75.16616821289062,
+              -35.467464447021484
+            ],
+            "type": "Point"
+          },
+          "energy": 8.850779614758193e-16,
+          "time": 1773757144661
+        }
+      ],
+      "netCdfFilename": [
+        "OR_GLM-L2-LCFA_G19_s20260761419000_e20260761419200_c20260761419215.nc"
+      ],
+      "title": "",
+      "startTime": "2026-03-17T14:19:04.605Z",
+      "endTime": "2026-03-17T14:19:04.661Z",
+      "duration": 0.056,
+      "energy": 8.850779614758193e-16,
+      "platformId": "G19",
+      "satellite": {
+        "height": 35786.0234375,
+        "latitude": 0,
+        "longitude": -75.19999694824219
+      }
+    }
+  ],
+  "isManuallyGenerated": false,
+  "isPipelineIssue": false,
+  "files": [
+    "G19_2026-03-17_14h19m04.637_-35.467_-75.166_1920260761419046001.pdf"
+  ],
+  "location": {
+    "coordinates": [
+      -75.16558074951172,
+      -35.467193603515625
+    ],
+    "type": "Point"
+  },
+  "images": [
+    {
+      "name": "Map",
+      "url": "/img/OR_GLM-L2-LCFA_G19_s20260761419000_e20260761419200_c20260761419215.nc_Map.png"
+    },
+    {
+      "name": "Energy Chart",
+      "url": "/img/OR_GLM-L2-LCFA_G19_s20260761419000_e20260761419200_c20260761419215.nc_EChart.png"
+    },
+    {
+      "name": "Trajectory Chart",
+      "url": "/img/OR_GLM-L2-LCFA_G19_s20260761419000_e20260761419200_c20260761419215.nc_TChart.png"
+    }
+  ],
+  "csv": [
+    "/csv/OR_GLM-L2-LCFA_G19_s20260761419000_e20260761419200_c20260761419215.nc.csv"
+  ],
+  "pdfFilenames": [
+    "G19_2026-03-17_14h19m04.637_-35.467_-75.166_1920260761419046001.pdf"
+  ],
+  "checkout_time": -111,
+  "assessmentScore": {
+    "score": 0.9015601873397827,
+    "assessment": "accepted"
+  },
+  "dataProductFile": ""
+}

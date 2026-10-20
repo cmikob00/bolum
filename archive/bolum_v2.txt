@@ -1,0 +1,694 @@
+import math
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.font_manager import FontProperties
+
+# Bolide Luminosity Model (bolum) Version 3
+# C.J. Miko
+# Modify inputs in the input deck and run to see if/how your bolide fragments
+# recent additions:
+#   added scaled luminous efficiency function based on velocity and density (Ceplecha et al 1998)
+#   added print statement to tell when the bolide fragments
+#   added plotting output vs time in W/sr and output vs altitude in W/sr
+#   changed angle variable in input deck to be angle_deg for consistency
+#   added in x and y components for position, velocity, and acceleration due to gravity
+#   added ballistic coefficient (default 1.5) for drag calculcation
+#   added shock front luminosity calculations - includes scaling for density and stagnation pressure
+#       luminosities still too high by factor of ~10
+#   need to consider adding in fragment tracking (separate module currently)
+
+# Constants
+pi                = math.pi         # numerical value of pi
+g                 = 9.81            # gravity (m/s^2)
+R                 = 287.05          # J/kg·K, specific gas constant for dry air
+sigma_sb          = 5.670374419e-8  # Stefan–Boltzmann constant
+rad2deg           = 180. / math.pi  # conversion factor from radians to degrees
+deg2rad           = math.pi / 180.  # conversion factor from degrees to radians
+
+# air constants
+gamma             = 1.4             # adiabatic index for air
+rho_air0          = 1.225           # sea-level atmospheric density (kg/m^3)
+p_air0            = 101325.         # sea-level air pressure in Pa
+H                 = 7160.0          # scale height of atmosphere (m)
+T0                = 288.15          # temperature at sea-level
+L                 = 0.0065          # temperature lapse rate in K / m
+rho_cutoff        = 0.01            # atmospheric density cutoff for strong shock formation
+
+# bolide constants
+lum_efficiency    = 0.03            # luminous efficiency
+strength_baseline = 1.e6            # baseline strength in Pascals
+epsilon           = 0.9             # surface emissivity
+L_ablation        = 5.e6            # heat of ablation in J/kg
+eta_0             = 0.03            # luminous efficiency scaling factor
+v_ref             = 20000.          # m/s, reference velocity for luminous efficiency scaling
+n                 = 2.              # velocity exponent for luminous efficiency scaling (Ceplecha et al 1998)
+m                 = 0.5             # density exponent for luminous efficiency scaling (Ceplecha et al 1998)
+
+# functions for 
+
+# calculate atmospheric density
+def atmos_density_calc(h):
+
+    rho = rho_air0 * np.exp(-h / H)
+
+    return rho
+
+# simple exponential model for pressure
+def atmos_pressure_calc(h):
+
+    p = p_air0 * np.exp(-h / H)
+
+    return p
+
+# calculate temperature at altitude
+def temp_altitude_calc(h):
+
+    # Linear lapse rate model: T = T0 - L * h
+    T = T0 - L * h
+
+    return max(T, 200)  # floor to avoid unrealistic temps
+
+# calculate speed of sound
+def sound_speed_calc(T):
+
+    a = np.sqrt(gamma * R * T)
+
+    return a
+
+# calculate Mach number
+def mach_num_calc(v, a):
+
+    M = v / a
+
+    return M
+
+# calculate dynamic pressure
+def dynamic_pressure(rho, v):
+
+    q = 0.5 * rho * v**2
+
+    return q
+
+# calculate initial velocities
+def vel_comp_calc(angle, velocity):
+
+    # forward is positive x, downward is negative y
+    vx = velocity * np.cos(angle)         # horizontal velocity
+    vy = -velocity * np.sin(angle)        # vertical velocity (negative since downward)
+    v = np.sqrt(vx**2 + vy**2)            # total speed
+    angle = np.arctan2(-vy, vx)           # angle of motion from horizontal (used for drag direction)
+
+    return vx, vy, v
+
+def angle_calc(vx, vy):
+
+    angle = np.arctan2(-vy, vx)           # angle of motion from horizontal (used for drag direction)
+
+    return angle
+
+# calculate kinetic energy
+def KE_calc(mass, v):
+
+    KE = 0.5 * mass * v**2.
+
+    return KE
+
+# calculate drag
+def drag_calc(rho, v, area, Cd):
+
+    # drag is defined as
+    drag = 0.5 * Cd * rho * v**2. * area
+
+    return drag
+
+# calculate acceleration
+def accel_calc(drag, mass, y, angle):
+
+    # first, calculate acceleration due to gravity
+    g = 9.81 * (6378140. / (6378140. + y))**2.  # Earth radius = 6378.14 km
+    acc_grav = -g * np.sin(angle)
+
+    # acc = Fdrag / m --> 0.5 * rho * v^2 * area / mass
+    acc_drag = drag / mass
+
+    # total acceleration
+    acc = acc_drag + acc_grav
+
+    return acc
+
+# calculate heat flux
+def heatflux_calc(drag, v, area):
+
+    q_h = (drag * v) / area
+
+    return q_h
+
+# calculate luminous efficiency scaling factor eta
+def luminous_efficiency_scaled(v, rho, eta_0, v_ref, rho_air0, n, m):
+
+    # m is 0.5 and n is 2 (Ceplecha et al 1998)
+    eta = eta_0 * (v / v_ref)**n * (rho / rho_air0)**m
+
+    return eta
+
+# calculate luminosity due to drag
+def lum_drag_calc(eta, drag, v, dt):
+        
+    # acc = Fdrag / mass, where drag = Fdrag
+    # Work = Force * Distance
+    # v * dt = distance, so
+    # dE = Force * Distance = drag * (v * dt), units of energy (J)
+    # dE / dt --> units of energy / time (J / s = W)
+    dE = drag * (v * dt)
+    luminosity_drag = eta * dE / dt
+
+    return luminosity_drag
+
+# dynamic emissivity function
+def epsilon_dynamic_calc(rho, p_stag):
+    if rho < 1.e-3:
+        epsilon_dynamic = 0.1
+    elif p_stag > 1.e4:
+        epsilon_dynamic = 0.8
+    else:
+        epsilon_dynamic = 0.5
+
+    return epsilon_dynamic
+
+# calculate lumonosity due to shock front
+def lum_shock_calc(area, T_stag, epsilon, M, q, rho, rho_cutoff):
+
+    # scale strong shock formation by atmospheric density
+    if rho < rho_cutoff:
+        scale = (rho / rho_cutoff)  # linear ramp
+    else:
+        scale = 1.0
+
+    luminosity_shock = scale * epsilon * sigma_sb * area * T_stag**4.
+
+    return luminosity_shock
+
+# calculate stagnation temperature
+def T_stag_calc(M, T):
+
+    T_stag = T * (1. + 0.5 * (gamma - 1.) * M**2.)
+
+    return T_stag
+
+# calculate stagnation pressure
+def p_stag_calc(q, p):
+
+    p_stag = q + p
+
+    return p_stag
+
+# calculate surface temperature
+def T_surf_calc(q_h):
+
+    T_surf = (q_h / (epsilon * sigma_sb))**0.25
+
+    return T_surf
+
+# calculate mass loss rate
+def dm_dt_calc(q_h, area, L_ablation):
+    
+    dm_dt = (q_h * area) / L_ablation
+
+    return dm_dt
+
+# estimate compressive strength based on density and porosity
+def compute_strength(init_strength):
+
+    if init_strength > 0:
+        strength = init_strength
+    else:
+        strength = 1.e5 * (1. - porosity) * (density / 3000.)  # density/3000 term normalizes to silicate
+
+    print(f"strength of bolide is {strength} Pa")
+
+    return strength
+
+# calculate updated x and y acceleration components
+def a_comp_calc(mass, drag, v, vx, vy, y):
+
+    # Drag force vector components (opposite to velocity)
+    drag_fx = -drag * (vx / v)
+    drag_fy = -drag * (vy / v)
+
+    # acceleration due to gravity
+    g = 9.81 * (6378140. / (6378140. + y))**2.  # Earth radius = 6378.14 km
+
+    # Accelerations
+    ax = drag_fx / mass
+    ay = drag_fy / mass - g
+
+    acc = np.sqrt(ax**2. + ay**2.)
+
+    return ax, ay, acc
+
+# calculate updated x and y component velocities
+def v_comp_calc(vx, vy, ax, ay, dt):
+
+    vx = vx + ax * dt
+    vy = vy + ay * dt
+    v = np.sqrt(vx**2. + vy**2.)
+
+    return vx, vy, v
+
+# calculate updated x and y component positions
+def xy_comp_calc(x, y, vx, vy, dt):
+
+    dx = vx * dt
+    dy = vy * dt
+
+    x = x + dx
+    y = y + dy
+
+    return dx, dy, x, y
+
+# main loop function
+def bolide_luminosity_model(diameter, velocity, angle_deg, ystart, xstart, density, porosity, tstart, dt, tstop, n_fragments, flare_duration):
+
+    # define header for plotting
+    header = (f"Diameter: {diameter} m | Velocity: {velocity/1000.} km/s | Angle: {angle_deg} deg from horiz")
+
+    y = ystart
+    print(f"initial altitude = {y} meters")
+
+    x = xstart
+    print(f"initial x-position = {x} meters")
+
+    v = velocity
+    print(f"initial velocity = {v} m/s")
+
+    t = tstart
+    print(f"initial time = {t} seconds")
+
+    # printing out initial angle
+    angle = np.radians(angle_deg)
+    print(f"initial angle of entry in radians = {angle} radians")
+
+    # print out initial area
+    area = np.pi * (diameter / 2.)**2.
+    print(f"area of bolide = {area} m^2")
+
+    # print out initial mass
+    mass = (4. / 3.) * np.pi * (diameter / 2.)**3. * density
+    print(f"mass of bolide = {mass} kg")
+
+    # compute material strength of bolide
+    strength = compute_strength(init_strength)
+
+    # calculate initial x and y velocity components of bolide
+    vx, vy, v = vel_comp_calc(angle, velocity)
+
+    # initializing arrays
+    # luminosity, altitudes, times
+    lum_array      = []
+    alt_array      = []
+    time_array     = []
+    mass_array     = []
+    dia_array      = []
+    area_array     = []
+
+    # energies, velocities, and accelerations
+    KE_array       = []
+    v_array        = []
+    accel_array    = []
+    heatflux_array = []
+
+    # shock physics quantities
+    q_array        = []
+    Mach_array     = []
+    T_stag_array   = []
+    p_stag_array   = []
+    T_surf_array   = []
+
+    # initial conditions for bolide
+    fragmented     = False
+    frag_altitude  = None
+    frag_time      = None
+    flare_end_time = None
+
+    # main loop
+    while y > 0 and v > 0:      
+
+        # calculate atmospheric quantities and flow variables:
+        # compute air density
+        rho = atmos_density_calc(y)
+
+        # compute atmospheric pressure
+        p = atmos_pressure_calc(y)
+
+        # compute temperature at altitude
+        T = temp_altitude_calc(y)
+
+        # compute speed of sound
+        a = sound_speed_calc(T)
+
+        # calculate Mach number of bolide
+        M = mach_num_calc(v, a)
+
+        # calculate dynamic pressure at bolide
+        q = dynamic_pressure(rho, v)
+
+        # compute drag of bolide
+        drag = drag_calc(rho, v, area, Cd)
+
+        # calculate kinetic energy of bolide
+        KE = KE_calc(mass, v)
+
+        # compute stagnation temperature
+        T_stag = T_stag_calc(M, T)
+
+        # compute stagnation pressure
+        p_stag = p_stag_calc(q, p)
+
+        # compute heat flux at bolide
+        q_h = heatflux_calc(drag, v, area)
+
+        # compute surface temperature
+        T_surf = T_surf_calc(q_h)
+
+        # perform fragmentation if conditions are right
+        if not fragmented and q > strength:
+            frag_altitude  = y
+            fragmented     = True
+            frag_time      = t
+            flare_end_time = t + flare_duration
+            area           = area * n_fragments
+            mass           = mass / n_fragments
+            print(f"Bolide fragmented at {frag_altitude} meters and {frag_time} seconds!\n")
+
+        # then calculate velocity- and density-dependent luminous efficiency
+        eta = luminous_efficiency_scaled(v, rho, eta_0, v_ref, rho_air0, n, m)
+
+        # compute change in energy and luminosity due to drag
+        luminosity_drag = lum_drag_calc(eta, drag, v, dt)
+
+        # calculate dynamic emissivity for shock luminosity calculation
+        epsilon_dynamic = epsilon_dynamic_calc(rho, p_stag)
+
+        # compute luminosity due to luminous shock front
+        luminosity_shock = lum_shock_calc(area, T_stag, epsilon_dynamic, M, q, rho, rho_cutoff)
+
+        # compute total luminosity
+        luminosity = luminosity_drag + luminosity_shock
+
+        # option to scale down luminosity in order to conserve energy
+        # eta_total = 0.05
+        # mech_loss = drag * v
+        # luminosity = min(luminosity_drag + luminosity_shock, eta_total * mech_loss)
+
+        # model flare if fragmented
+        if fragmented and t <= flare_end_time:
+            luminosity = luminosity * n_fragments
+
+        # update dynamical variables: acceleration, velocity, positions, and angle of entry
+        # acceleration:
+        ax, ay, acc = a_comp_calc(mass, drag, v, vx, vy, y)
+
+        # velocity:
+        vx, vy, v = v_comp_calc(vx, vy, ax, ay, dt)
+        dv = acc * dt
+        v = v - dv
+        print(f"updated velocity   = {v} m/s")
+
+        # positions:
+        dx, dy, x, y = xy_comp_calc(x, y, vx, vy, dt)
+        print(f"change in altitude = {dy} meters")
+        print(f"change in position = {dx} meters")
+        print(f"updated position   = {x} meters")
+        print(f"updated altitude   = {y} meters")
+
+        # compute change in angle
+        angle = angle_calc(vx, vy)
+        angle_deg = angle * rad2deg  # convert to degrees for wast print-out
+        print(f"updated angle of entry is {angle_deg} degrees")
+
+        # update physical properties: mass, diameter, area
+        # mass
+        dm_dt = dm_dt_calc(q_h, area, L_ablation)  # compute mass loss rate due to ablation
+        mass = mass - (dm_dt * dt)
+        print(f"updated mass     = {mass} kg")
+
+        # diameter
+        diameter = 2. * (((3. * mass) / (4. * np.pi * density))**(1. / 3.))
+        print(f"updated diameter = {diameter} meters")
+
+        # area
+        area = np.pi * (diameter / 2.)**2.
+        print(f"updated area     = {area} m^2")
+
+        # finally, update timestep
+        t = t + dt
+        print(f"updated time     = {t} seconds\n")
+
+        # update all arrays
+        # luminosity, altitudes, times
+        lum_array.append(luminosity)
+        alt_array.append(y)
+        time_array.append(t)
+        mass_array.append(mass)
+        dia_array.append(diameter)
+        area_array.append(area)
+
+        # energies and velocities
+        KE_array.append(KE)
+        v_array.append(v)
+        accel_array.append(acc)
+        heatflux_array.append(q_h)
+
+        # shock physics quantities
+        q_array.append(q)
+        Mach_array.append(M)
+        T_stag_array.append(T_stag)
+        p_stag_array.append(p_stag)
+        T_surf_array.append(T_surf)
+
+        # stop simulation if time exceeds tstop
+        if t > tstop:
+            print(f"time exceeded tstop: end simulation")
+            break
+
+        # Stop simulation if mass drops to zero
+        if mass <= 0:
+            print(f"mass is <= 0 kg: end simulation")
+            break
+
+    return (
+        header,
+        strength,
+        np.array(lum_array),
+        np.array(alt_array),
+        np.array(time_array),
+        np.array(mass_array),
+        np.array(dia_array),
+        np.array(area),
+        frag_altitude,
+        frag_time,
+        np.array(KE_array),
+        np.array(v_array),
+        np.array(accel_array),
+        np.array(heatflux_array),
+        np.array(q_array),
+        np.array(Mach_array),
+        np.array(T_stag_array),
+        np.array(p_stag_array),
+        np.array(T_surf_array)
+    )
+
+# Input deck
+diameter       = 18.        # meters
+velocity       = 19000.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+angle_deg      = 19.0       # degrees from the horizontal
+density        = 3500.0     # kg/m^3
+porosity       = 0.1        # 0 to 1
+Cd             = 1.5        # ballistic coefficient for hypersonic flows
+init_strength  = 3.e6       # material type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+ystart         = 100000.    # meters
+xstart         = 0.         # keep at zero (for 2-D trajectory)
+tstart         = 0.0        # start time in seconds
+dt             = 0.003      # timestep in seconds
+tstop          = 60.0       # stop time in seconds
+n_fragments    = 3          # number of fragments produced
+flare_duration = 0.2        # seconds
+
+# call main loop
+header, strength, lums, alts, times,masses, dias, areas, frag_h, frag_t, KEs, velocities, accels, q_hs, qs, Machs, T_stags, p_stags, T_surfs = bolide_luminosity_model(
+    diameter, velocity, angle_deg, ystart, xstart, density, porosity, tstart, dt, tstop, n_fragments, flare_duration)
+
+# Plot outputs
+# luminosity in Watts vs time
+plt.figure()
+plt.plot(times, lums)
+plt.xscale('linear')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Luminosity (Watts)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Light Curve\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# radiant intensity in W/sr vs time
+plt.figure()
+# convert luminosity in watts to W/sr
+radiant_intensities = lums / (4. * pi)
+plt.plot(times, radiant_intensities)
+plt.xscale('linear')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Radiant Intensity (W/sr)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Light Curve\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# luminosity vs altitude
+plt.figure()
+plt.plot(lums, alts / 1000.)
+plt.xscale('log')
+plt.xlabel('Luminosity (Watts)')
+plt.ylabel('Altitude (km)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_h is not None: 
+    plt.axhline(frag_h / 1000., linestyle='--', color='green')
+plt.title(f'Bolide Light Curve\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# radiant intensity in W/sr vs altitude
+plt.figure()
+# convert luminosity in watts to W/sr
+radiant_intensities = lums / (4. * pi)
+plt.plot(radiant_intensities, alts / 1000.)
+plt.xscale('log')
+plt.xlabel('Radiant Intensity (W/sr)')
+plt.ylabel('Altitude (km)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_h is not None: 
+    plt.axhline(frag_h / 1000., linestyle='--', color='green')
+plt.title(f'Bolide Light Curve\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# altitude vs time
+plt.figure()
+plt.plot(times, alts / 1000.)
+plt.xscale('log')
+plt.xlabel('Time (seconds))')
+plt.ylabel('Altitude (km)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_h is not None:
+    plt.axhline(frag_h / 1000., linestyle='--', color='green')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Light Curve\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# velocity vs time
+plt.figure()
+plt.plot(times, velocities/1000.)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Velocity (km/s)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Velocity vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# acceleration vs time
+plt.figure()
+plt.plot(times, accels)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Acceleration (m/s^2)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Acceleration vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# dynamic pressure vs time
+plt.figure()
+plt.plot(times, qs)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Dynamic Pressure (Pa)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axhline(strength, linestyle='--', color='green')
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Dynamic Pressure vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# dynamic pressure vs altitude
+plt.figure()
+plt.plot(alts/1000., qs)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Altitude (km)')
+plt.ylabel('Dynamic Pressure (Pa)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axhline(strength, linestyle='--', color='green')
+    plt.axvline(frag_h/1000., linestyle='--', color='green')
+plt.title(f'Bolide Dynamic Pressure vs Altitude\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# stagnation temperature vs time
+plt.figure()
+plt.plot(times, T_stags)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Stagnation Temperature (K)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Stagnation Temperature vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# stagnation pressure vs time
+plt.figure()
+plt.plot(times, p_stags)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Stagnation Pressure (Pa)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Stagnation Pressure vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()
+
+# surface temperature vs time
+plt.figure()
+plt.plot(times, T_stags)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Time (seconds)')
+plt.ylabel('Surface Temperature (K)')
+plt.gcf().text(.14, .85, header, fontsize=10, color='blue')
+if frag_t is not None:
+    plt.axvline(frag_t, linestyle='--', color='green')
+plt.title(f'Bolide Surface Temperature vs Time\nFragmentation at {frag_h/1000:.1f} km' if frag_h else 'No Fragmentation')
+plt.grid(True)
+plt.show()

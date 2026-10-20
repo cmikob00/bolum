@@ -1,0 +1,9 @@
+Bolum Input Deck
+User must define: diameter, velocity, theta_deg, init_strength, and density
+
+diameter            = 64.0        # meters
+velocity            = 20000.0    # entry velocity in m/s (ranges from 11200 to ~70000)
+theta_deg           = 45.        # degrees from the horizontal
+
+init_strength       = 1.e5       # mat type: iron=1.e7, chondrite=1.e5, carbonaceous=1.e4, cometary=1.e3
+density             = 3000.      # density in kg/m^3 

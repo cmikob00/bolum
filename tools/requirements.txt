@@ -1,0 +1,9 @@
+requests>=2.28.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+tqdm>=4.65.0
+numpy
+# Optional but recommended for nicer datetime handling and LightCurve objects:
+# lightkurve>=2.0.0
+# If you expand to the full bolides package later:
+# bolides

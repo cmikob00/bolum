@@ -1,0 +1,7 @@
+2008 TC3 / Almahata Sitta (Jenniskens+2009, Borovicka & Charvat 2009)  -- bolum v2 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 4.1        # m   (~83 t at 2300 kg/m^3)
+velocity       = 12800.0    # m/s
+theta_deg      = 19.5       # deg
+init_strength  = 1.5e5      # Pa  first fragmentation ~0.15 MPa near 45-50 km
+density        = 2300.0     # kg/m^3

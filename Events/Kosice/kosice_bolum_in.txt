@@ -1,0 +1,8 @@
+Kosice 2010 (Borovicka+2013 MAPS)  -- bolum v2.1 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 1.25       # m   (3500 kg at 3400 kg/m^3)
+velocity       = 15000.0    # m/s
+theta_deg      = 60.0       # deg
+init_strength  = 1.0e5      # Pa  published first breakup, p = rho*v^2
+strength_secondary = 1.0e6  # Pa  published second stage (heavy fragmentation)
+density        = 3400.0     # kg/m^3

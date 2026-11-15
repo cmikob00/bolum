@@ -1,0 +1,7 @@
+Chelyabinsk 2013 (Popova+2013 Science, Brown+2013 Nature)  -- bolum v2 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 19.6       # m   (1.3e7 kg at 3300 kg/m^3)
+velocity       = 19160.0    # m/s
+theta_deg      = 18.3       # deg to horizontal
+init_strength  = 7.0e5      # Pa  dynamic pressure of first major breakup
+density        = 3300.0     # kg/m^3

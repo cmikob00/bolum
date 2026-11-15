@@ -1,0 +1,72 @@
+====================================================================================================
+ bolum v2.1 run report
+====================================================================================================
+ INPUT
+   body            d = 1.800 m   m0 = 1.0077e+04 kg   rho = 3300 kg/m3
+   entry           v = 17.500 km/s   theta = 31.90 deg   start alt = 100 km
+   KE0             1.5430e+12 J = 0.3688 kt TNT
+   strength        S0 = 0.3300 MPa  (loading = rho*v^2, stagnation pressure); Weibull alpha = 0.4
+   ablation        Lambda = 0.05  Q = 5.00e+06 J/kg  -> sigma = Lambda/(2Q) = 0.0050 s^2/km^2
+   fragmentation   4 children/breakup, dust 20% (r = 2.0 cm), spread c = 0.5, f_split = 2.0, f_max = 8.0
+   sensor          band 0.4-1.1 um at T_rad = 6000 K -> f_si = 0.6429   (L_bol = L_si / f_si);  tau basis = si
+   luminosity      eta = (1-w)*tau(v,m) + w*0.20*f_si,  w = r/(r + 6 m);  t_cool = 0 s
+ FRAGMENTATION
+   first yield     alt 49.59 km  at loading 0.330 MPa  (t = 5.493 s)
+   breakups        18 (refused: 0);  max simultaneous groups 73
+   max loading     2.13 MPa at 31.6 km;   max deceleration of solid groups 1779.4 g
+   first events:      kind    t(s)   alt(km)  loading(MPa)    mass(kg)  strength(MPa)  gen
+                      yield   5.493     49.59        0.330   1.002e+04         0.330    0
+                      split   5.667     48.01        0.401   9.982e+03         0.330    0
+                      yield   5.829     46.54        0.484   3.809e+03         0.484    1
+                      split   6.006     44.94        0.594   3.733e+03         0.484    1
+                      yield   6.060     44.46        0.640   1.883e+03         0.639    1
+                      split   6.171     43.46        0.728   1.853e+03         0.639    1
+                      yield   6.171     43.47        0.711   1.379e+03         0.710    2
+                      yield   6.192     43.27        0.751   1.245e+03         0.751    1
+                      split   6.276     42.51        0.828   1.228e+03         0.751    1
+                      yield   6.288     42.41        0.845   9.272e+02         0.843    1
+                      split   6.348     41.93        0.815   1.230e+03         0.710    2
+                      split   6.357     41.79        0.914   9.157e+02         0.843    1
+                      yield   6.414     41.31        0.939   6.613e+02         0.936    2
+                      yield   6.438     41.14        0.937   6.369e+02         0.936    2
+                      split   6.525     40.35        1.009   6.034e+02         0.936    2
+                      split   6.549     40.19        1.003   5.812e+02         0.936    2
+                      yield   6.558     40.03        1.104   4.273e+02         1.101    2
+                      yield   6.606     39.70        1.102   3.992e+02         1.101    2
+                      split   6.642     39.32        1.155   3.944e+02         1.101    2
+                      yield   6.660     39.14        1.236   3.124e+02         1.236    2
+                      split   6.687     39.03        1.146   3.701e+02         1.101    2
+                      yield   6.702     38.84        1.237   2.952e+02         1.236    2
+                      split   6.729     38.55        1.275   2.904e+02         1.236    2
+                      yield   6.735     38.63        1.237   2.835e+02         1.236    2
+                      split   6.768     38.29        1.272   2.757e+02         1.236    2
+                      split   6.801     38.09        1.267   2.648e+02         1.236    2
+                      yield   6.867     37.43        1.455   1.852e+02         1.453    2
+                      yield   6.896     37.25        1.456   1.791e+02         1.453    2
+                      split   6.918     37.02        1.470   1.739e+02         1.453    2
+                      split   6.945     36.85        1.469   1.687e+02         1.453    2
+                      yield   6.993     36.38        1.631   1.314e+02         1.630    2
+                      split   7.033     36.06        1.635   1.246e+02         1.630    2
+                      yield   7.054     36.00        1.633   1.230e+02         1.630    2
+                      yield   7.090     35.66        1.711   1.087e+02         1.709    2
+                      split   7.094     35.69        1.630   1.166e+02         1.630    2
+                      split   7.128     35.37        1.704   1.032e+02         1.709    2
+                      yield   7.263     34.31        1.920   7.380e+01         1.917    2
+                      yield   7.300     34.08        1.920   7.126e+01         1.917    2
+ ENERGY
+   deposited       1.5389e+12 J = 0.368 kt  (99.73% of KE0; gravity work adds a little)
+   dE/dh           peak 0.0 kt/km at 38.8 km;  half-peak range 34.8-43.2 km;  half of the energy deposited above 39.2 km
+   ledger closure  (KE0 + W_grav - E_dep - KE_left)/KE0 = 5.71e-15
+ LIGHT
+   first light     L_si > 1e-6 of peak at 100.0 km (t = 0.00 s);  luminous end (L < 1% of peak) at 31.2 km
+   peak            L_si = 8.341e+10 W  (6.638e+09 W/sr)   L_bol = 1.297e+11 W
+                   at t = 6.53 s, ~40.5 km, mass-weighted speed 15.9 km/s
+   radiated        Si band 8.778e+10 J;  bolometric 1.365e+11 J = 0.0326 kt
+   efficiency      bolometric 8.87% / Si-band 5.70% of deposited energy
+   Brown+2002 check  E_total = 8.2508 E_rad^0.885 -> 0.399 kt  (model KE0 = 0.369 kt, ratio 1.08; population scatter ~x2)
+ SURVIVORS
+   solid 11.82% and dust 10.94% of m0 left luminous flight (< 3.0 km/s) or reached the ground;  ground-impact KE 0.00e+00 J
+ RUN
+   3353 steps, simulated 10.0 s, wall time 1.35 s
+   no warnings
+====================================================================================================

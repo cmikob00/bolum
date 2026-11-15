@@ -1,0 +1,36 @@
+====================================================================================================
+ bolum v2.2 run report
+====================================================================================================
+ INPUT
+   body            d = 0.350 m   m0 = 7.6328e+01 kg   rho = 3400 kg/m3
+   entry           v = 14.400 km/s   theta = 72.00 deg   start alt = 100 km
+   KE0             7.9136e+09 J = 0.0019 kt TNT
+   strength        S0 = 4.0000 MPa  (loading = rho*v^2, stagnation pressure); Weibull alpha = 0.4
+   ablation        Lambda = 0.05  Q = 5.00e+06 J/kg  -> sigma = Lambda/(2Q) = 0.0050 s^2/km^2
+   fragmentation   4 children/breakup, dust 20% (r = 2.0 cm), spread c = 0.5, f_split = 2.0, f_max = 8.0
+   sensor          band 0.4-1.1 um at T_rad = 6000 K -> f_si = 0.6429   (L_bol = L_si / f_si);  tau basis = si
+   luminosity      eta = (1-w)*tau(v,m) + w*0.20*f_si,  w = r/(r + 6 m);  t_cool = 0 s
+ FRAGMENTATION
+   first yield     alt 28.33 km  at loading 4.005 MPa  (t = 5.283 s)
+   breakups        1 (refused: 0);  max simultaneous groups 5
+   max loading     4.05 MPa at 28.0 km;   max deceleration of solid groups 1249.4 g
+   first events:      kind    t(s)   alt(km)  loading(MPa)    mass(kg)  strength(MPa)  gen
+                      yield   5.283     28.33        4.005   6.236e+01         4.000    0
+                      split   5.293     28.20        4.043   6.183e+01         4.000    0
+ ENERGY
+   deposited       7.8419e+09 J = 0.002 kt  (99.09% of KE0; gravity work adds a little)
+   dE/dh           peak 0.0 kt/km at 27.2 km;  half-peak range 25.2-28.2 km;  half of the energy deposited above 27.2 km
+   ledger closure  (KE0 + W_grav - E_dep - KE_left)/KE0 = 2.01e-15
+ LIGHT
+   first light     L_si > 1e-6 of peak at 100.0 km (t = 0.00 s);  luminous end (L < 1% of peak) at 22.5 km
+   peak            L_si = 8.033e+08 W  (6.392e+07 W/sr)   L_bol = 1.249e+09 W
+                   at t = 5.30 s, ~28.2 km, mass-weighted speed 12.9 km/s
+   radiated        Si band 2.588e+08 J;  bolometric 4.025e+08 J = 0.0001 kt
+   efficiency      bolometric 5.13% / Si-band 3.30% of deposited energy
+   Brown+2002 check  E_total = 8.2508 E_rad^0.885 -> 0.002 kt  (model KE0 = 0.002 kt, ratio 1.22; population scatter ~x2)
+ SURVIVORS
+   solid 29.52% and dust 7.38% of m0 left luminous flight (< 3.0 km/s) or reached the ground;  ground-impact KE 0.00e+00 J
+ RUN
+   2192 steps, simulated 6.5 s, wall time 0.88 s
+   no warnings
+====================================================================================================

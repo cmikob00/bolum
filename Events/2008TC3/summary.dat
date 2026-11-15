@@ -39,5 +39,5 @@ ground_ke_J                0.0
 energy_closure             -1.1139966121663643e-14
 reached_tstop              False
 steps                      7058
-wall_s                     2.735952138900757
+wall_s                     3.0041868686676025
 duration_s                 21.17400000000069

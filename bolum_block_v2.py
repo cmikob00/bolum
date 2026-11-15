@@ -1,36 +1,50 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_block_v2.py  (version 2.1)  --  reduced-order bolide entry / fragmentation / luminosity model
+bolum_block_v2.py  (version 2.2)  --  reduced-order bolide entry / fragmentation / luminosity model
 
-CHANGES IN 2.1 (vs 2.0)
-  * Fragmentation loading is now ALWAYS the stagnation (ram) pressure  p = rho * v^2  [R5,R6,R7,R8,R2].
-    q_factor is gone.  Strengths therefore follow the published convention directly.
-    !!  If you carry over strengths from the ORIGINAL bolum_block.py (which used 0.5*rho*v^2),
-    !!  MULTIPLY THEM BY 2 to get the same behaviour.
-  * One standardized 6-panel summary figure per event (same layout for every event) in bolide_plots.pdf.
-  * Log power-vs-time plots now extend ~10 decades below the peak so the early-time signal is visible.
-  * Much richer command-line report (also written to run_report.txt).
-  * Optional sensor-saturation overlay (--sat-W) for comparing against saturated data.
-  * References / provenance for every formulation are listed below and tagged [R#] in the code.
+VERSION 2.2 IS A STRUCTURAL REFACTOR OF 2.1: THE PHYSICS AND THE NUMBERS ARE IDENTICAL.
+  The big time-stepping loop has been broken into small, named, commented functions so that each physical
+  process can be read (and later modified) on its own.  Every function below says WHAT it computes, WHY, and
+  which equation / reference it comes from.  Nothing about the model itself changed (verified bit-for-bit
+  against 2.1 on 12 test cases; see the regression note at the bottom of the diagnostics script).
 
-WHAT THE MODEL DOES (details, equations and provenance in the REFERENCES block at the end of this docstring)
-  Step 1  US Std 1976 atmosphere, Earth-centred trajectory, adaptive step, exact kinetic-energy ledger.
-  Step 2  Ablation: dm/dt = Lambda * (1/2) rho v^3 * A_proj / Q  (Lambda <= 1, decoupled from Cd).
-  Step 3  Fragment groups: yield at rho v^2 >= S, pancake spreading, Weibull-strengthened children, dust.
-  Light   L = eta * (drag work + KE of ablated mass);  eta blends the empirical tau(v,m) (thin, meteor-like)
-          with an optically-thick bolometric efficiency for large clouds.  Output: Si-band L_si and bolometric
-          L_bol = L_si / f_si(T_rad),  f_si = in-band fraction of a blackbody at T_rad (Planck law).
+HOW THE MODEL WORKS  (read this first)
+--------------------------------------
+The bolide is represented as a set of "groups".  A group is a lump of material that moves as one body: it has a
+mass, a position and velocity vector (Earth-centred x,z in metres), a strength, and an area-growth factor `f`
+(f = 1 means a compact sphere; f > 1 means it has been flattened/spread into a "pancake").  At the start there is
+ONE group: the intact body.  Breakups replace a group by several child groups plus a "dust" group.
 
-INPUT DECK: unchanged format (first 2 lines skipped, 'key = value  # comment').  Legacy keys rho_tau_scale,
-flare_duration, n_frag_init, q_factor are accepted and ignored.  strength_secondary/tertiary/quaternary are
-optional overrides of the child strength at generations 1/2/3 (otherwise Weibull scaling).
+Each time step does the following, in this order (this is exactly the body of the loop in run_bolide):
+
+   1. LOCAL ENVIRONMENT   altitude, speed, air density, and the stagnation-pressure "loading" rho*v^2 of each group
+   2. GEOMETRY            projected (cross-section) area of each group, including pancake growth / dust area
+   3. FORCES & HEATING    drag deceleration, ablation (mass-loss) rate
+   4. YIELD CHECK         a group whose loading >= its strength "yields" and starts to spread sideways (pancake)
+   5. TIME STEP           choose dt small enough to resolve mass loss, deceleration and spreading
+   6. ADVANCE             update mass, velocity, position, spread factor; book-keep the energy given to the air
+   7. RADIATION           turn the deposited energy into light (Si-band power) with an efficiency eta
+   8. RECORD              accumulate energy ledgers, dE/dh bins, light-curve samples
+   9. RETIRE              remove groups that burned up, hit the ground, or slowed below luminous speeds
+  10. SPLIT               groups that have spread far enough break into children + dust (progressive fragmentation)
+
+ENERGY BOOK-KEEPING (why the ledger closes exactly)
+  Each step the kinetic energy of a group changes by:  - E_drag (work done on the air by drag)
+                                                       + W_grav (work done by gravity)
+                                                       - E_abl  (kinetic energy carried away by ablated mass)
+  E_dep = E_drag + E_abl is the energy deposited in the atmosphere; a fraction eta of it is radiated.
+
+PROVENANCE KEY:  [lit] taken from the literature   [adapt] literature form, adapted   [cal] value calibrated here
+                 [new] construct introduced here (no direct published equivalent)
 
 USAGE
   python3 bolum_block_v2.py EVENT [--base DIR] [--no-plots] [--quiet] [--sat-W WATTS]
 
-PROVENANCE KEY:  [lit] taken from the literature   [adapt] literature form, adapted   [cal] value calibrated here
-                 [new] construct introduced here (no direct published equivalent)
+INPUT DECK: unchanged format (first 2 lines skipped, 'key = value  # comment').  Legacy keys rho_tau_scale,
+flare_duration, n_frag_init, q_factor are accepted and ignored.  strength_secondary/tertiary/quaternary are optional
+overrides of the child strength at generations 1/2/3 (otherwise Weibull scaling).  Strengths are stagnation
+pressures rho*v^2 (the published convention); multiply strengths from the ORIGINAL bolum_block.py (0.5*rho*v^2) by 2.
 
 REFERENCES
   [R1]  Ceplecha, Borovicka, Elford, ReVelle, Hawkes, Porubcan & Simek (1998), Meteor phenomena and bodies,
@@ -52,12 +66,11 @@ REFERENCES
   [R9]  Register, Mathias & Wheeler (2017), Asteroid fragmentation approaches for modeling atmospheric energy
         deposition, Icarus 284, 157-166 (volume/pages from memory - verify).
   [R10] Johnston, Stern & Wheeler (2018), Radiative heating of large meteoroids during atmospheric entry,
-        Icarus 309, 25-44.   Canonical heat-transfer coefficient 0.1; radiative heating dominates for large bodies
-        and is reduced by coupled ablation/radiation.
+        Icarus 309, 25-44.   Canonical heat-transfer coefficient 0.1; radiative heating dominates for large bodies.
   [R11] Weibull (1951), A statistical distribution function of wide applicability, J. Appl. Mech. 18, 293-297.
   [R12] Brown, Spalding, ReVelle, Tagliaferri & Worden (2002), The flux of small near-Earth objects colliding with
         the Earth, Nature 420, 294-296.   E_total = 8.2508 E_rad^0.885 (kt); integral luminous efficiency rises with
-        energy; 6000 K blackbody convention for the bolometric conversion.
+        energy; 6000 K blackbody convention for the bolometric conversion (verify).
   [R13] Brown et al. (2013), A 500-kiloton airburst over Chelyabinsk and an enhanced hazard from small impactors,
         Nature 503, 238-241.
   [R14] Popova et al. (2013), Chelyabinsk airburst, damage assessment, meteorite recovery, and characterization,
@@ -77,7 +90,7 @@ REFERENCES
   [T1]  Standard textbook physics: Planck's law (band fraction); Rayleigh pitot / Newtonian hypersonic stagnation
         pressure (p_stag = 0.92 rho v^2 for gamma = 1.4, -> rho v^2 for strong shocks).
 """
-__version__ = "2.1"
+__version__ = "2.2"
 
 import os
 import sys
@@ -87,46 +100,53 @@ import argparse
 from dataclasses import dataclass, fields, field
 import numpy as np
 
-# ----------------------------------------------------------------------------------------
-# constants
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 1. CONSTANTS
+# ========================================================================================
 PI = math.pi
 RE = 6.371e6                 # mean Earth radius (m)
 GM = 3.986004418e14          # Earth gravitational parameter (m^3/s^2)
-G0 = 9.80665
-JKT = 4.184e12               # J per kiloton TNT
-SIGMA_SB = 5.670374419e-8
-H_PL, C_LIGHT, K_B = 6.62607015e-34, 2.99792458e8, 1.380649e-23
+G0 = 9.80665                 # standard gravity, used only to express decelerations in "g"
+JKT = 4.184e12               # joules per kiloton of TNT
+SIGMA_SB = 5.670374419e-8    # Stefan-Boltzmann constant
+H_PL, C_LIGHT, K_B = 6.62607015e-34, 2.99792458e8, 1.380649e-23   # Planck, speed of light, Boltzmann
 DEFAULT_BASE = "/Users/julie/Desktop/Projects/bolum/Events/"
 
-_trapz = getattr(np, "trapezoid", None) or np.trapz
+_trapz = getattr(np, "trapezoid", None) or np.trapz   # numpy 1.x / 2.x compatibility
 
 
-# ----------------------------------------------------------------------------------------
-# atmosphere  [lit R19]: US Standard 1976 (analytic layers to 86 km, tabulated density 86-120 km)
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 2. ATMOSPHERE  [lit R19]
+# ========================================================================================
 class Atmosphere:
-    """Density vs geometric altitude.  rho(alt_m) is vectorised; extrapolates exponentially above 120 km."""
+    """Air density as a function of geometric altitude: US Standard Atmosphere 1976.
+
+    Below 86 km the standard's analytic layer equations (constant temperature or constant lapse rate, hydrostatic
+    balance) are evaluated on a 100 m grid.  Between 86 and 120 km a tabulated density is used.  The result is
+    stored as ln(rho) on a 100 m grid and linearly interpolated, which is fast and smooth enough for this model.
+    Above 120 km the density is extrapolated exponentially using the local scale height."""
 
     _UPPER_KM = np.array([86., 90., 95., 100., 105., 110., 115., 120.])
     _UPPER_RHO = np.array([6.958e-6, 3.416e-6, 1.393e-6, 5.604e-7, 2.176e-7, 9.708e-8, 4.289e-8, 2.222e-8])
 
     def __init__(self):
-        g0, Rg, r0 = 9.80665, 287.053, 6356766.0
-        Hb = np.array([0, 11, 20, 32, 47, 51, 71, 84.852]) * 1e3          # geopotential base (m)
-        Lb = np.array([-6.5, 0.0, 1.0, 2.8, 0.0, -2.8, -2.0]) * 1e-3     # K/m
+        g0, Rg, r0 = 9.80665, 287.053, 6356766.0            # gravity, specific gas constant of air, standard Earth radius
+        Hb = np.array([0, 11, 20, 32, 47, 51, 71, 84.852]) * 1e3          # geopotential altitudes of layer bases (m)
+        Lb = np.array([-6.5, 0.0, 1.0, 2.8, 0.0, -2.8, -2.0]) * 1e-3     # temperature lapse rate in each layer (K/m)
+        # --- temperature and pressure at the base of every layer (hydrostatic integration, layer by layer) ---
         Tb, Pb = [288.15], [101325.0]
         for i in range(7):
             dH = Hb[i + 1] - Hb[i]
-            if abs(Lb[i]) < 1e-12:
+            if abs(Lb[i]) < 1e-12:                           # isothermal layer
                 Tb.append(Tb[-1])
                 Pb.append(Pb[-1] * math.exp(-g0 * dH / (Rg * Tb[-1])))
-            else:
+            else:                                            # constant-lapse-rate layer
                 T1 = Tb[-1] + Lb[i] * dH
                 Pb.append(Pb[-1] * (T1 / Tb[-1]) ** (-g0 / (Rg * Lb[i])))
                 Tb.append(T1)
+        # --- temperature, pressure and density on a fine altitude grid up to 86 km ---
         h = np.arange(0.0, 86.0001e3, 100.0)
-        Hg = r0 * h / (r0 + h)
+        Hg = r0 * h / (r0 + h)                               # geometric -> geopotential altitude
         lay = np.clip(np.searchsorted(Hb, Hg, side="right") - 1, 0, 6)
         T = np.empty_like(h)
         P = np.empty_like(h)
@@ -139,14 +159,16 @@ class Atmosphere:
             else:
                 T[s] = Tb[i] + Lb[i] * dH
                 P[s] = Pb[i] * (T[s] / Tb[i]) ** (-g0 / (Rg * Lb[i]))
-        rho_low = P / (Rg * T)
+        rho_low = P / (Rg * T)                               # ideal gas law
+        # --- splice the analytic part (<= 86 km) with the table (86-120 km), store ln(rho) on a 100 m grid ---
         hk = np.concatenate([h / 1e3, self._UPPER_KM[1:]])
         lr = np.concatenate([np.log(rho_low), np.log(self._UPPER_RHO[1:])])
         self._hk = np.arange(0.0, 120.0001, 0.1)
         self._lr = np.interp(self._hk, hk, lr)
-        self._scale_h = 1e3 * (self._hk[-1] - self._hk[-51]) / (self._lr[-51] - self._lr[-1])
+        self._scale_h = 1e3 * (self._hk[-1] - self._hk[-51]) / (self._lr[-51] - self._lr[-1])   # scale height near 120 km (m)
 
     def rho(self, alt_m):
+        """Air density (kg/m^3) at altitude alt_m (m); works on scalars or arrays."""
         a = np.asarray(alt_m, dtype=float) / 1e3
         lr = np.interp(a, self._hk, self._lr)
         hi = a > 120.0
@@ -158,26 +180,27 @@ class Atmosphere:
 ATM = Atmosphere()
 
 
-# ----------------------------------------------------------------------------------------
-# luminous efficiency, sensor band, bolometric <-> Si-band conversion
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 3. LUMINOUS EFFICIENCY AND SENSOR-BAND CONVERSION
+# ========================================================================================
 def tau_fit(v, m):
-    """tau(v, m) as a fraction (the published fit is in percent).  [lit R2, Eqs. 3-4]
+    """Empirical luminous efficiency tau(v, m) as a FRACTION (the published fit is in percent).  [lit R2, Eqs. 3-4]
 
         ln tau = 0.567 - 10.307 ln v + 9.781 ln^2 v - 3.0414 ln^3 v + 0.3213 ln^4 v + 0.347 tanh(0.38 ln m)   v < 25.372 km/s
         ln tau = -1.4286 + ln v + 0.347 tanh(0.38 ln m)                                                         v > 25.372 km/s
         (v in km/s, m in kg).  Velocity form: Pecina & Ceplecha (1983); mass form adapted from ReVelle & Ceplecha (2001).
 
+    The fit gives the fraction of the energy lost by a METEOR-SIZED fragment that comes out as light.
     [new] The fit is only meaningful for meteor-like speeds: v is clamped to >= 2 km/s inside the polynomial and
     tau is tapered smoothly to zero between 2 and 4 km/s (the raw polynomial turns upward below ~2 km/s)."""
     v = np.asarray(v, dtype=float)
-    vk = np.maximum(v, 2000.0) / 1000.0
+    vk = np.maximum(v, 2000.0) / 1000.0                      # speed in km/s, clamped at the low end
     lv = np.log(vk)
-    th = 0.347 * np.tanh(0.38 * np.log(np.maximum(m, 1e-10)))
-    lt_lo = 0.567 - 10.307 * lv + 9.781 * lv ** 2 - 3.0414 * lv ** 3 + 0.3213 * lv ** 4 + th
-    lt_hi = -1.4286 + lv + th
+    th = 0.347 * np.tanh(0.38 * np.log(np.maximum(m, 1e-10)))   # mass-dependent term
+    lt_lo = 0.567 - 10.307 * lv + 9.781 * lv ** 2 - 3.0414 * lv ** 3 + 0.3213 * lv ** 4 + th   # v < 25.372 km/s branch
+    lt_hi = -1.4286 + lv + th                                # v > 25.372 km/s branch
     tau = np.exp(np.where(vk < 25.372, lt_lo, lt_hi)) / 100.0
-    taper = np.clip((v - 2000.0) / 2000.0, 0.0, 1.0) ** 2
+    taper = np.clip((v - 2000.0) / 2000.0, 0.0, 1.0) ** 2    # 0 at 2 km/s, 1 at 4 km/s  [new]
     return tau * taper
 
 
@@ -186,17 +209,19 @@ def band_fraction(T, lo_um=0.4, hi_um=1.1, lam_um=None, resp=None):
 
         f(T) = integral_band  R(lam) B_lam(T) dlam  /  (sigma T^4 / pi),     B_lam = 2hc^2 / (lam^5 (exp(hc/lam k T) - 1))
 
+    This is the fraction of a blackbody's total radiated power that falls inside the sensor band, so
+    L_si = f * L_bol  and  L_bol = L_si / f.
     Default response R = 1 inside [lo_um, hi_um] (broadband silicon, 0.4-1.1 um) and 0 outside.  Pass lam_um/resp
     (peak-normalised relative spectral response) to use a measured sensor curve instead."""
     T = np.atleast_1d(np.asarray(T, dtype=float))
-    if resp is None:
+    if resp is None:                                         # top-hat response: integrate Planck over [lo, hi]
         lam = np.linspace(lo_um, hi_um, int(np.clip((hi_um - lo_um) / 0.0015, 600, 200000))) * 1e-6
         w = np.ones_like(lam)
-    else:
+    else:                                                    # user-supplied sensor response curve
         lam = np.asarray(lam_um, dtype=float) * 1e-6
         w = np.asarray(resp, dtype=float)
     x = H_PL * C_LIGHT / (lam[None, :] * K_B * T[:, None])
-    B = 2.0 * H_PL * C_LIGHT ** 2 / lam[None, :] ** 5 / np.expm1(x)
+    B = 2.0 * H_PL * C_LIGHT ** 2 / lam[None, :] ** 5 / np.expm1(x)      # Planck spectral radiance
     return _trapz(B * w[None, :], lam, axis=1) / (SIGMA_SB * T ** 4 / PI)
 
 
@@ -210,12 +235,13 @@ def si_from_bolometric(L_bol, T_rad=6000.0, lo_um=0.4, hi_um=1.1):
     return np.asarray(L_bol) * float(band_fraction(T_rad, lo_um, hi_um)[0])
 
 
-# ----------------------------------------------------------------------------------------
-# parameters
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 4. PARAMETERS AND INPUT DECK
+# ========================================================================================
 @dataclass
 class BolumParams:
-    # --- required ---
+    """Every tunable number in the model, with its default and provenance."""
+    # --- required: the event ---
     diameter: float = 1.0            # m
     velocity: float = 20.0e3         # m/s (atmosphere-relative)
     theta_deg: float = 45.0          # entry angle to local horizontal at zstart
@@ -224,7 +250,7 @@ class BolumParams:
     # --- material / aerodynamics ---
     porosity: float = 0.1            # only used if init_strength <= 0
     Cd: float = 1.0                  # drag coefficient [lit R1,R7]
-    # --- ablation (step 2) ---
+    # --- ablation (step 2 of the original plan) ---
     L_ablation: float = 5.0e6        # J/kg, effective heat of ablation Q [lit R1]
     Lambda: float = 0.05             # heat-transfer coefficient (<=1) on projected area [cal; canonical 0.1, R10]
     T_ablate: float = 2300.0         # K, ablation onset: net flux must exceed radiative loss [adapt R20]
@@ -262,6 +288,7 @@ class BolumParams:
     v_dark: float = 3.0e3            # groups slower than this leave luminous flight (m/s)
 
     def strength0(self):
+        """Initial strength of the intact body (Pa)."""
         if self.init_strength > 0:
             return self.init_strength
         return 2.0e5 * (1.0 - self.porosity) * (self.density / 3000.0)
@@ -271,7 +298,7 @@ _LEGACY_IGNORED = {"rho_tau_scale", "flare_duration", "n_frag_init", "q_factor"}
 
 
 def rdinput(inputpath):
-    """Read a bolum_in.dat deck (same format as before)."""
+    """Read a bolum_in.dat deck (first two lines skipped; 'key = value  # comment') and return BolumParams."""
     raw = {}
     with open(inputpath, "r") as fh:
         lines = fh.readlines()[2:]
@@ -303,16 +330,17 @@ def rdinput(inputpath):
     return BolumParams(**kw)
 
 
-# ----------------------------------------------------------------------------------------
-# result container
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 5. RESULT CONTAINER
+# ========================================================================================
 @dataclass
 class BolumResult:
+    """Everything a run produces: time series, dE/dh profiles, breakup events, and a summary dictionary."""
     params: BolumParams
     t: np.ndarray
-    L_si: np.ndarray
-    L_bol: np.ndarray
-    P_dep: np.ndarray
+    L_si: np.ndarray           # Si-band luminosity (W)
+    L_bol: np.ndarray          # bolometric luminosity (W) = L_si / f_si
+    P_dep: np.ndarray          # power deposited in the atmosphere (W)
     alt: np.ndarray            # energy-weighted mean altitude of the radiating groups (m)
     v: np.ndarray              # mass-weighted speed (m/s)
     mass: np.ndarray           # total mass still in flight (kg)
@@ -326,204 +354,380 @@ class BolumResult:
     summary: dict = field(default_factory=dict)
 
 
-# ----------------------------------------------------------------------------------------
-# the engine
-# ----------------------------------------------------------------------------------------
-def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
-    wall0 = time.time()
-    rho_b = p.density
-    m0 = 4.0 / 3.0 * PI * (0.5 * p.diameter) ** 3 * rho_b
+# ========================================================================================
+# 6. FRAGMENT-GROUP STATE
+# ========================================================================================
+@dataclass
+class GroupState:
+    """All fragment groups, stored as arrays of length max_groups ("slots").
+
+    A slot is in use when alive[i] is True.  Dead slots are recycled when a group splits.
+        m        mass (kg)
+        x, z     position in Earth-centred Cartesian coordinates (m); altitude = hypot(x, z) - RE
+        vx, vz   velocity components (m/s)
+        f        linear spread factor: projected radius = (solid-sphere radius) * f   (1 = compact, f_max = full pancake)
+        fb       value of f at birth; the group splits when f >= fb * f_split
+        S        strength: loading rho*v^2 (Pa) at which the group yields
+        gen      generation (0 = original body, 1 = its children, ...)
+        alive    slot in use
+        yielded  group has already been recorded as yielding (used only to log the first yield once)
+        dust     True for dust groups (fine particles with a large area-to-mass ratio; they never split)"""
+    m: np.ndarray
+    x: np.ndarray
+    z: np.ndarray
+    vx: np.ndarray
+    vz: np.ndarray
+    f: np.ndarray
+    fb: np.ndarray
+    S: np.ndarray
+    gen: np.ndarray
+    alive: np.ndarray
+    yielded: np.ndarray
+    dust: np.ndarray
+
+
+def make_initial_state(p: BolumParams, m0: float) -> GroupState:
+    """Create the empty slot arrays and put the intact body in slot 0.
+
+    The body starts at altitude zstart above the surface at x = 0, moving at speed `velocity` in a straight line
+    that makes angle theta with the local horizontal (down and to +x).  Earth-centred coordinates mean the local
+    vertical rotates automatically as the body travels, so no flat-Earth approximation is needed."""
     NG = int(p.max_groups)
-    n_child = int(p.n_fragments)
-    w_share = np.arange(1, n_child + 1, dtype=float) ** (-p.frag_index)
-    w_share /= w_share.sum()
-    q_loss = p.emissivity * SIGMA_SB * p.T_ablate ** 4
-    m_dead = 1.0e-9 * m0
-    f_si = float(band_fraction(p.T_rad, p.sensor_lo_um, p.sensor_hi_um)[0])
-    basis_si = p.tau_basis.lower() == "si"
-    legacy_S = [p.strength_secondary, p.strength_tertiary, p.strength_quaternary]
-
-    m = np.zeros(NG); x = np.zeros(NG); z = np.zeros(NG)
-    vx = np.zeros(NG); vz = np.zeros(NG)
-    f = np.ones(NG); fb = np.ones(NG); S = np.zeros(NG)
-    gen = np.zeros(NG, dtype=int)
-    alive = np.zeros(NG, dtype=bool)
-    yielded = np.zeros(NG, dtype=bool)
-    dust = np.zeros(NG, dtype=bool)
-
+    st = GroupState(m=np.zeros(NG), x=np.zeros(NG), z=np.zeros(NG), vx=np.zeros(NG), vz=np.zeros(NG),
+                    f=np.ones(NG), fb=np.ones(NG), S=np.zeros(NG), gen=np.zeros(NG, dtype=int),
+                    alive=np.zeros(NG, dtype=bool), yielded=np.zeros(NG, dtype=bool), dust=np.zeros(NG, dtype=bool))
     th = math.radians(p.theta_deg)
-    m[0], z[0] = m0, RE + p.zstart
-    vx[0], vz[0] = p.velocity * math.cos(th), -p.velocity * math.sin(th)
-    S[0] = p.strength0()
-    alive[0] = True
-    KE0 = 0.5 * m0 * p.velocity ** 2
+    st.m[0], st.z[0] = m0, RE + p.zstart
+    st.vx[0], st.vz[0] = p.velocity * math.cos(th), -p.velocity * math.sin(th)
+    st.S[0] = p.strength0()
+    st.alive[0] = True
+    return st
 
-    bin_w = 500.0
-    nb = int(150e3 / bin_w)
-    dep_bins = np.zeros(nb)
-    rad_bins = np.zeros(nb)
 
-    T_ = []; L_si = []; P_ = []; ALT = []; V_ = []; M_ = []; N_ = []; Q_ = []
-    events = []
-    E_dep_tot = E_rad_tot = W_g_tot = KE_retired = M_retired = 0.0
-    retired = []
-    t = p.tstart
-    nsteps = 0
-    split_refused = 0
-    n_groups_max = 1
-    a_max = 0.0
-    q_peak, alt_q_peak = 0.0, float("nan")
+# ========================================================================================
+# 7. PHYSICS BUILDING BLOCKS  (each is a small pure function acting on arrays of groups)
+# ========================================================================================
+def local_environment(x, z, vx, vz):
+    """Altitude, speed, air density and stagnation-pressure loading for each group.
 
-    def spawn_children(i, t_now, alt_now, q_now):
-        """Replace group i by n_child children plus a dust group.  [new; concept R4,R8,R16]
-        Mass conserving; total projected area ~continuous; child strength by Weibull scaling [R8,R11]."""
-        free = np.flatnonzero(~alive)
-        need = n_child if p.dust_frac > 0 else n_child - 1
-        mp, fp, Sp, gp = m[i], f[i], S[i], gen[i]
-        m_solid = mp * (1.0 - p.dust_frac)
-        if len(free) < need or m_solid * w_share[-1] < p.m_min_frag:
-            return False
-        slots = [i] + list(free[: n_child - 1])
-        xi_, zi_, vxi_, vzi_ = x[i], z[i], vx[i], vz[i]
-        for k, s_ in enumerate(slots):
-            mk = m_solid * w_share[k]
-            fk = max(1.0, fp * (mk / mp) ** (1.0 / 6.0))
-            gnew = gp + 1
-            if gnew <= 3 and legacy_S[gnew - 1] is not None:
-                Sk = max(Sp, float(legacy_S[gnew - 1]))
-            else:
-                Sk = Sp * (mp / mk) ** p.weibull_alpha
-            m[s_], x[s_], z[s_], vx[s_], vz[s_] = mk, xi_, zi_, vxi_, vzi_
-            f[s_], fb[s_], S[s_], gen[s_] = fk, fk, Sk, gnew
-            alive[s_] = True
-            yielded[s_] = False
-            dust[s_] = False
-        if p.dust_frac > 0:
-            d_ = free[n_child - 1]
-            m[d_], x[d_], z[d_], vx[d_], vz[d_] = mp * p.dust_frac, xi_, zi_, vxi_, vzi_
-            f[d_], fb[d_], S[d_], gen[d_] = 1.0, np.inf, np.inf, gp + 1
-            alive[d_] = True
-            yielded[d_] = False
-            dust[d_] = True
-        events.append(dict(kind="split", t=t_now, alt=alt_now, q=q_now, mass=mp, strength=Sp, gen=gp))
-        return True
+    The loading is p = rho * v^2, the (hypersonic) stagnation pressure that squeezes the front of the body
+    [lit R5-R8, R2].  (1/2 rho v^2 would be the incompressible dynamic pressure, which understates the load ~2x.)
+    Returns r (distance from Earth's centre), alt, v, rho, q."""
+    r = np.hypot(x, z)
+    alt = r - RE
+    v = np.hypot(vx, vz)
+    rho = ATM.rho(alt)
+    q = rho * v * v
+    return r, alt, v, rho, q
 
-    while alive.any() and t < p.tstop:
-        ia = np.flatnonzero(alive)
-        mi, xi, zi = m[ia], x[ia], z[ia]
-        du = dust[ia]
-        vxi, vzi, fi, Si = vx[ia], vz[ia], f[ia], S[ia]
-        ri = np.hypot(xi, zi)
-        alt = ri - RE
-        vi = np.hypot(vxi, vzi)
-        rho = ATM.rho(alt)
-        q = rho * vi * vi                                        # stagnation-pressure loading [lit R5-R8, R2]
-        rs = (3.0 * mi / (4.0 * PI * rho_b)) ** (1.0 / 3.0)
-        A = np.where(du, 3.0 * mi / (4.0 * rho_b * p.dust_radius), PI * rs * rs * fi * fi)   # projected area
-        F = 0.5 * p.Cd * rho * vi * vi * A                       # drag [lit R1,R7]
-        a_dr = F / mi
-        # --- heating / ablation (step 2) [adapt R1, R10, R20] ---
-        qh = p.Lambda * 0.5 * rho * vi ** 3
-        mdot = np.maximum(qh - q_loss, 0.0) * A / p.L_ablation
-        # --- yield + pancake spreading (step 3) [lit R5-R8] ---
-        yl = q >= Si
-        newly = yl & ~yielded[ia]
-        if newly.any():
-            for j in np.flatnonzero(newly):
-                events.append(dict(kind="yield", t=t, alt=alt[j], q=q[j], mass=mi[j], strength=Si[j], gen=int(gen[ia[j]])))
-            yielded[ia[newly]] = True
-        dfdt = np.where(yl, p.c_spread * vi * np.sqrt(rho / rho_b) / rs, 0.0)
-        # --- adaptive step ---
-        with np.errstate(divide="ignore", invalid="ignore"):
-            d1 = np.min(np.where(mdot > 0, np.where(du, 0.3, 0.03) * mi / mdot, np.inf))
-            d2 = np.min(np.where(a_dr > 0, 0.02 * vi / a_dr, np.inf))
-            d3 = np.min(np.where(dfdt > 0, 0.05 * fi / dfdt, np.inf))
-        dt = max(min(p.dt, d1, d2, d3), p.dt_min)
-        # --- update ---
-        gr = GM / ri ** 2
-        gxv, gzv = -gr * xi / ri, -gr * zi / ri
-        dm = mi * (-np.expm1(-mdot * dt / mi))
-        mnew = mi - dm
-        dead = mnew < m_dead
-        dm = np.where(dead, mi, dm)
-        mnew = np.where(dead, 0.0, mnew)
-        dvx_d, dvz_d = -a_dr * vxi / vi * dt, -a_dr * vzi / vi * dt
-        vxn = vxi + dvx_d + gxv * dt
-        vzn = vzi + dvz_d + gzv * dt
-        vbx, vbz = 0.5 * (vxi + vxn), 0.5 * (vzi + vzn)
-        E_drag = -mnew * (vbx * dvx_d + vbz * dvz_d)
-        E_abl = 0.5 * dm * vi * vi
-        W_g = mnew * (vbx * gxv + vbz * gzv) * dt
-        E_dep = E_drag + E_abl
-        xn, zn = xi + vbx * dt, zi + vbz * dt
-        fn = np.minimum(fi + dfdt * dt, p.f_max)
-        vn = np.hypot(vxn, vzn)
-        altn = np.hypot(xn, zn) - RE
-        # --- radiation: thin (tau fit) <-> thick (large cloud) blend [new; R2, R12, R13] ---
-        tau = tau_fit(vi, mi)
-        r_proj = np.sqrt(A / PI)
-        w_thick = r_proj / (r_proj + p.lum_r_half)
-        eta_thin = tau if basis_si else tau * f_si
-        eta_thick = p.eta_thick_bol * f_si * np.clip((vi - 4.0e3) / 4.0e3, 0.0, 1.0)
-        eta = np.minimum((1.0 - w_thick) * eta_thin + w_thick * eta_thick, p.eta_max * f_si)
-        E_rad_si = eta * E_dep
-        # --- ledgers / diagnostics ---
-        E_dep_s, W_g_s = float(E_dep.sum()), float(W_g.sum())
-        E_dep_tot += E_dep_s
-        W_g_tot += W_g_s
-        E_rad_tot += float(E_rad_si.sum())
-        bi = np.clip((alt / bin_w).astype(int), 0, nb - 1)
-        np.add.at(dep_bins, bi, E_dep)
-        np.add.at(rad_bins, bi, E_rad_si)
-        jq = int(np.argmax(q))
-        if q[jq] > q_peak:
-            q_peak, alt_q_peak = float(q[jq]), float(alt[jq])
+
+def solid_radius(m, rho_body):
+    """Radius of a compact sphere of mass m and bulk density rho_body (m)."""
+    return (3.0 * m / (4.0 * PI * rho_body)) ** (1.0 / 3.0)
+
+
+def projected_area(m, f, is_dust, rho_body, dust_radius):
+    """Cross-sectional area each group presents to the airflow (m^2).  Also returns the solid radius.
+
+    * Ordinary group:  A = pi (r_solid * f)^2.  f = 1 for a compact sphere; f grows as the group spreads into a
+      pancake [lit R5, R6, R7].
+    * Dust group:      many small spheres of radius `dust_radius` (default 2 cm) share the group's mass; their total
+      cross-section is A = 3 m / (4 rho r_dust).  This large area-to-mass ratio makes dust decelerate and ablate
+      quickly, which deposits energy and produces flares.  [new; cal]"""
+    rs = solid_radius(m, rho_body)
+    A = np.where(is_dust, 3.0 * m / (4.0 * rho_body * dust_radius), PI * rs * rs * f * f)
+    return A, rs
+
+
+def drag_deceleration(rho, v, A, m, Cd):
+    """Drag force F = 1/2 Cd rho A v^2 and the resulting deceleration a = F/m.  [lit R1, R7]  Returns (F, a)."""
+    F = 0.5 * Cd * rho * v * v * A
+    return F, F / m
+
+
+def ablation_mass_rate(rho, v, A, Lambda, q_loss, Q):
+    """Mass-loss rate dm/dt (kg/s, positive) from aerodynamic heating.
+
+    The free-stream kinetic-energy flux is (1/2) rho v^3.  A fraction Lambda (<= 1; canonical 0.1 [R10]) of it heats the
+    surface:  q_heat = Lambda * (1/2) rho v^3.  Surface radiation at the ablation temperature carries away q_loss =
+    emissivity*sigma*T_ablate^4, so only the NET flux beyond that ablates material (ablation onset idea [adapt R20]):
+        dm/dt = max(q_heat - q_loss, 0) * A / Q,       Q = effective heat of ablation (J/kg)  [lit R1]
+    The flux is applied to the PROJECTED area A (not the full sphere), so it can never exceed the kinetic-energy flux
+    the airstream actually carries through that area."""
+    qh = Lambda * 0.5 * rho * v ** 3
+    return np.maximum(qh - q_loss, 0.0) * A / Q
+
+
+def pancake_spreading_rate(yielding, v, rho, rho_body, rs, c_spread):
+    """Rate of change of the spread factor, df/dt (1/s).  [adapt R5, R6, R21; cal c_spread]
+
+    A group whose loading exceeds its strength ("yielding") is squeezed and spreads laterally, like a pancake,
+    at a speed  dr/dt = c * v * sqrt(rho_air / rho_body).  Dividing by the solid radius turns this into growth of
+    the linear spread factor f.  Groups that are not yielding do not spread."""
+    return np.where(yielding, c_spread * v * np.sqrt(rho / rho_body) / rs, 0.0)
+
+
+def gravity_acceleration(x, z, r):
+    """Gravitational acceleration components (m/s^2) pointing toward Earth's centre."""
+    gr = GM / r ** 2
+    return -gr * x / r, -gr * z / r
+
+
+def choose_time_step(p, mdot, m, is_dust, a_drag, v, dfdt, f):
+    """Pick the time step (s) so that no group changes too much in one step.
+
+    The step is the smallest of:  the user maximum p.dt;  3 % of the shortest mass-loss time (30 % for dust, which
+    burns fast by design);  2 % of the shortest deceleration time v/a;  5 % of the shortest spreading time f/(df/dt).
+    It is never smaller than p.dt_min."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        d1 = np.min(np.where(mdot > 0, np.where(is_dust, 0.3, 0.03) * m / mdot, np.inf))
+        d2 = np.min(np.where(a_drag > 0, 0.02 * v / a_drag, np.inf))
+        d3 = np.min(np.where(dfdt > 0, 0.05 * f / dfdt, np.inf))
+    return max(min(p.dt, d1, d2, d3), p.dt_min)
+
+
+@dataclass
+class StepUpdate:
+    """New state of the active groups after one step, plus the energy terms for the step."""
+    mnew: np.ndarray
+    xn: np.ndarray
+    zn: np.ndarray
+    vxn: np.ndarray
+    vzn: np.ndarray
+    fn: np.ndarray
+    vn: np.ndarray
+    altn: np.ndarray
+    E_drag: np.ndarray   # work done on the air by drag during the step (J)
+    E_abl: np.ndarray    # kinetic energy carried off by ablated mass (J)
+    E_dep: np.ndarray    # = E_drag + E_abl: energy deposited in the atmosphere (J)
+    W_g: np.ndarray      # work done on the groups by gravity (J)
+
+
+def advance_groups(p, dt, m, x, z, vx, vz, f, r, v, a_drag, mdot, dfdt, m_dead):
+    """Advance every active group by one step of length dt and book-keep the energy exchanged.  Returns StepUpdate.
+
+    Mass:      exponential loss  m_new = m * exp(-mdot*dt/m)  (never negative, stable for fast ablation).  A group whose
+               mass falls below m_dead is treated as completely ablated (all of its mass is removed).
+    Velocity:  drag along the direction of motion plus gravity (explicit Euler).
+    Position:  advanced with the MEAN of the old and new velocity (second-order accurate).
+    Energy:    using the mean velocity makes the kinetic-energy bookkeeping exact:
+                   KE_new - KE_old  =  -E_drag + W_grav - E_abl
+               with E_drag = work against drag, E_abl = 1/2 dm v^2 carried away by ablated mass, W_grav = gravity work.
+    Spread:    f grows by df/dt*dt, limited to the pancake maximum f_max."""
+    gxv, gzv = gravity_acceleration(x, z, r)
+    dm = m * (-np.expm1(-mdot * dt / m))                     # mass ablated this step (exponential law)
+    mnew = m - dm
+    dead = mnew < m_dead                                     # essentially nothing left: remove the whole group
+    dm = np.where(dead, m, dm)
+    mnew = np.where(dead, 0.0, mnew)
+    dvx_d, dvz_d = -a_drag * vx / v * dt, -a_drag * vz / v * dt        # velocity change from drag (opposes motion)
+    vxn = vx + dvx_d + gxv * dt
+    vzn = vz + dvz_d + gzv * dt
+    vbx, vbz = 0.5 * (vx + vxn), 0.5 * (vz + vzn)            # mean velocity over the step
+    E_drag = -mnew * (vbx * dvx_d + vbz * dvz_d)             # work done against drag = energy given to the air
+    E_abl = 0.5 * dm * v * v                                 # kinetic energy of the mass that was ablated
+    W_g = mnew * (vbx * gxv + vbz * gzv) * dt                # work done by gravity
+    E_dep = E_drag + E_abl
+    xn, zn = x + vbx * dt, z + vbz * dt
+    fn = np.minimum(f + dfdt * dt, p.f_max)
+    vn = np.hypot(vxn, vzn)
+    altn = np.hypot(xn, zn) - RE
+    return StepUpdate(mnew, xn, zn, vxn, vzn, fn, vn, altn, E_drag, E_abl, E_dep, W_g)
+
+
+def radiative_efficiency(p, f_si, basis_si, v, m, A):
+    """Fraction eta of the deposited energy that is emitted as Si-band light, for each group.  [new blend; R2, R12, R13]
+
+    Two limits are blended:
+      * THIN  (small, meteor-like fragments):  eta_thin = tau(v, m), the published empirical fit [lit R2].  If the fit is
+        interpreted as bolometric (tau_basis = 'bolometric') it is multiplied by f_si to give a Si-band value.
+      * THICK (large, radiation-dominated clouds): eta_thick = eta_thick_bol * f_si, a bolometric efficiency that does
+        not depend on speed (but is tapered to zero between 4 and 8 km/s so light ends when the body slows).
+    The blend weight is  w = r/(r + r_half), r = projected radius of the group, so big clouds are 'thick' and small
+    fragments are 'thin'.  [cal: eta_thick_bol = 0.20, r_half = 6 m, fitted to Chelyabinsk and TC3.]
+    The result is capped at eta_max (bolometric) so the model can never radiate more than a sane fraction."""
+    tau = tau_fit(v, m)
+    r_proj = np.sqrt(A / PI)
+    w_thick = r_proj / (r_proj + p.lum_r_half)
+    eta_thin = tau if basis_si else tau * f_si
+    eta_thick = p.eta_thick_bol * f_si * np.clip((v - 4.0e3) / 4.0e3, 0.0, 1.0)
+    return np.minimum((1.0 - w_thick) * eta_thin + w_thick * eta_thick, p.eta_max * f_si)
+
+
+# ========================================================================================
+# 8. FRAGMENTATION BOOK-KEEPING
+# ========================================================================================
+def log_new_yields(st, ia, yl, t, alt, q, Si, events):
+    """Record (once per group) the moment a group first yields, i.e. its loading first reaches its strength."""
+    newly = yl & ~st.yielded[ia]
+    if newly.any():
+        for j in np.flatnonzero(newly):
+            events.append(dict(kind="yield", t=t, alt=alt[j], q=q[j], mass=st.m[ia][j], strength=Si[j], gen=int(st.gen[ia[j]])))
+        st.yielded[ia[newly]] = True
+
+
+def child_mass_shares(p):
+    """Mass fractions of the children of one breakup: share of child k (k = 1..n) is proportional to k^-frag_index,
+    normalised to 1.  With the default index 1 and 4 children the shares are 0.48, 0.24, 0.16, 0.12.  [new]"""
+    w = np.arange(1, int(p.n_fragments) + 1, dtype=float) ** (-p.frag_index)
+    return w / w.sum()
+
+
+def spawn_children(st, i, p, w_share, legacy_S, t_now, alt_now, q_now, events):
+    """Break group i into n children plus a dust group (progressive fragmentation).  [new; concept R4, R8, R16]
+
+    * Mass is conserved:  dust_frac of the parent goes to the dust group; the rest is shared among the children by
+      `w_share`.
+    * Children keep the parent's position and velocity (they separate later through differential drag).
+    * STRENGTH: a child of mass m_k gets  S_k = S_parent * (m_parent/m_k)^alpha  (Weibull size scaling: smaller pieces
+      are stronger because they contain fewer flaws) [lit form R8, R11].  If the deck gave strength_secondary/
+      tertiary/quaternary these override generations 1, 2, 3 (never below the parent's strength).
+    * AREA continuity: the spread factor of each child is chosen so that the children's total projected area is about
+      equal to the parent's, so the drag does not jump at the instant of breakup.
+    * Returns False (and does nothing) if there are not enough free slots or the smallest child would be lighter than
+      p.m_min_frag; the caller then leaves the group as a pancake."""
+    free = np.flatnonzero(~st.alive)
+    n_child = int(p.n_fragments)
+    need = n_child if p.dust_frac > 0 else n_child - 1
+    mp, fp, Sp, gp = st.m[i], st.f[i], st.S[i], st.gen[i]     # parent mass, spread, strength, generation
+    m_solid = mp * (1.0 - p.dust_frac)
+    if len(free) < need or m_solid * w_share[-1] < p.m_min_frag:
+        return False
+    slots = [i] + list(free[: n_child - 1])                   # child 0 reuses the parent's slot
+    xi_, zi_, vxi_, vzi_ = st.x[i], st.z[i], st.vx[i], st.vz[i]
+    for k, s_ in enumerate(slots):
+        mk = m_solid * w_share[k]
+        fk = max(1.0, fp * (mk / mp) ** (1.0 / 6.0))          # area-continuity spread factor
+        gnew = gp + 1
+        if gnew <= 3 and legacy_S[gnew - 1] is not None:      # deck override of the stage strength
+            Sk = max(Sp, float(legacy_S[gnew - 1]))
+        else:                                                 # Weibull scaling
+            Sk = Sp * (mp / mk) ** p.weibull_alpha
+        st.m[s_], st.x[s_], st.z[s_], st.vx[s_], st.vz[s_] = mk, xi_, zi_, vxi_, vzi_
+        st.f[s_], st.fb[s_], st.S[s_], st.gen[s_] = fk, fk, Sk, gnew
+        st.alive[s_] = True
+        st.yielded[s_] = False
+        st.dust[s_] = False
+    if p.dust_frac > 0:                                       # the dust group takes the next free slot
+        d_ = free[n_child - 1]
+        st.m[d_], st.x[d_], st.z[d_], st.vx[d_], st.vz[d_] = mp * p.dust_frac, xi_, zi_, vxi_, vzi_
+        st.f[d_], st.fb[d_], st.S[d_], st.gen[d_] = 1.0, np.inf, np.inf, gp + 1   # infinite strength: never yields/splits
+        st.alive[d_] = True
+        st.yielded[d_] = False
+        st.dust[d_] = True
+    events.append(dict(kind="split", t=t_now, alt=alt_now, q=q_now, mass=mp, strength=Sp, gen=gp))
+    return True
+
+
+def split_spread_groups(st, p, w_share, legacy_S, t, events):
+    """Split every group that has spread far enough (f >= fb * f_split) while yielding.
+
+    Returns the number of splits that were REFUSED (no free slots / fragments too small).  A refused group is
+    marked unsplittable (fb = inf): it simply stays a pancake limited by f_max."""
+    refused = 0
+    cand = np.flatnonzero(st.alive & st.yielded & (st.f >= st.fb * p.f_split))
+    for k in cand:
+        altk = float(np.hypot(st.x[k], st.z[k]) - RE)
+        vk = float(np.hypot(st.vx[k], st.vz[k]))
+        qk = float(ATM.rho(altk)) * vk * vk
+        if not spawn_children(st, k, p, w_share, legacy_S, t, altk, qk, events):
+            st.fb[k] = np.inf
+            refused += 1
+    return refused
+
+
+def retire_groups(st, ia, up: StepUpdate, du, p, t, rec):
+    """Remove groups that have left the simulation this step, updating the recorder's survivor ledgers.
+
+    A group is retired if it has been completely ablated (mass 0 - nothing to keep), hit the ground (altitude <= 0),
+    or slowed below p.v_dark (it is no longer luminous; it continues in 'dark flight').  Retired groups that still
+    have mass are logged in rec.retired with their mass, speed, altitude and kinetic energy (these are the survivors),
+    and their kinetic energy and mass are added to rec.KE_retired / rec.M_retired (needed for the energy closure)."""
+    gone = (up.mnew <= 0)
+    st.alive[ia[gone]] = False
+    out = (~gone) & ((up.altn <= 0.0) | (up.vn < p.v_dark))
+    for j in np.flatnonzero(out):
+        ke = 0.5 * up.mnew[j] * up.vn[j] ** 2
+        rec.KE_retired += ke
+        rec.M_retired += up.mnew[j]
+        rec.retired.append(dict(mass=up.mnew[j], v=up.vn[j], alt=up.altn[j], t=t, ke=ke, ground=bool(up.altn[j] <= 0), dust=bool(du[j])))
+        st.alive[ia[j]] = False
+
+
+# ========================================================================================
+# 9. RUN RECORDER  (ledgers, light-curve samples, dE/dh bins)
+# ========================================================================================
+class RunRecorder:
+    """Collects everything we want to report while the loop runs."""
+
+    def __init__(self, p: BolumParams):
+        self.bin_w = 500.0                                   # altitude-bin width for dE/dh (m)
+        self.nb = int(150e3 / self.bin_w)
+        self.dep_bins = np.zeros(self.nb)                    # energy deposited in each altitude bin (J)
+        self.rad_bins = np.zeros(self.nb)                    # Si-band energy radiated in each altitude bin (J)
+        self.T, self.L_si, self.P, self.ALT, self.V, self.M, self.N, self.Q = [], [], [], [], [], [], [], []
+        self.events = []                                     # yield and split events
+        self.retired = []                                    # groups that left the simulation with mass
+        self.E_dep_tot = self.E_rad_tot = self.W_g_tot = 0.0  # running energy totals
+        self.KE_retired = self.M_retired = 0.0
+        self.split_refused = 0
+        self.n_groups_max = 1
+        self.a_max = 0.0                                     # largest deceleration of any non-dust group (m/s^2)
+        self.q_peak, self.alt_q_peak = 0.0, float("nan")     # largest loading and where it occurred
+        self.nsteps = 0
+
+    def record_step(self, t, dt, alt, v, q, a_drag, du, m_before, up: StepUpdate, E_rad_si, n_alive_before):
+        """Log one step.  `t` is the time at the END of the step."""
+        E_dep_s, W_g_s = float(up.E_dep.sum()), float(up.W_g.sum())
+        self.E_dep_tot += E_dep_s
+        self.W_g_tot += W_g_s
+        self.E_rad_tot += float(E_rad_si.sum())
+        # dE/dh: add each group's deposited / radiated energy to the altitude bin it occupied at the start of the step
+        bi = np.clip((alt / self.bin_w).astype(int), 0, self.nb - 1)
+        np.add.at(self.dep_bins, bi, up.E_dep)
+        np.add.at(self.rad_bins, bi, E_rad_si)
+        jq = int(np.argmax(q))                               # track the most heavily loaded group
+        if q[jq] > self.q_peak:
+            self.q_peak, self.alt_q_peak = float(q[jq]), float(alt[jq])
         if (~du).any():
-            a_max = max(a_max, float(a_dr[~du].max()))
-        t += dt
-        T_.append(t); L_si.append(E_rad_si.sum() / dt); P_.append(E_dep_s / dt)
-        wts = E_dep if E_dep_s > 0 else mi
-        ALT.append(float((wts * alt).sum() / wts.sum()))
-        V_.append(float((mi * vi).sum() / mi.sum()) if mi.sum() > 0 else 0.0)
-        M_.append(float(mnew.sum())); N_.append(int((mnew > 0).sum())); Q_.append(float(q.max()))
-        n_groups_max = max(n_groups_max, int(alive.sum()))
-        # --- commit state ---
-        m[ia], x[ia], z[ia], vx[ia], vz[ia], f[ia] = mnew, xn, zn, vxn, vzn, fn
-        gone = (mnew <= 0)
-        alive[ia[gone]] = False
-        out = (~gone) & ((altn <= 0.0) | (vn < p.v_dark))
-        for j in np.flatnonzero(out):
-            k = ia[j]
-            ke = 0.5 * mnew[j] * vn[j] ** 2
-            KE_retired += ke
-            M_retired += mnew[j]
-            retired.append(dict(mass=mnew[j], v=vn[j], alt=altn[j], t=t, ke=ke, ground=bool(altn[j] <= 0), dust=bool(du[j])))
-            alive[k] = False
-        # --- splitting ---
-        cand = np.flatnonzero(alive & yielded & (f >= fb * p.f_split))
-        for k in cand:
-            altk = float(np.hypot(x[k], z[k]) - RE)
-            vk = float(np.hypot(vx[k], vz[k]))
-            qk = float(ATM.rho(altk)) * vk * vk
-            if not spawn_children(k, t, altk, qk):
-                fb[k] = np.inf                                   # cannot split: keep as a pancake
-                split_refused += 1
-        nsteps += 1
+            self.a_max = max(self.a_max, float(a_drag[~du].max()))
+        # time series (light curve etc.)
+        self.T.append(t)
+        self.L_si.append(E_rad_si.sum() / dt)
+        self.P.append(E_dep_s / dt)
+        wts = up.E_dep if E_dep_s > 0 else m_before          # altitude: weighted by deposited energy (or by mass)
+        self.ALT.append(float((wts * alt).sum() / wts.sum()))
+        self.V.append(float((m_before * v).sum() / m_before.sum()) if m_before.sum() > 0 else 0.0)
+        self.M.append(float(up.mnew.sum()))
+        self.N.append(int((up.mnew > 0).sum()))
+        self.Q.append(float(q.max()))
+        self.n_groups_max = max(self.n_groups_max, n_alive_before)
+        self.nsteps += 1
 
-    # ------------------------------------------------------------------ assemble outputs
-    T_ = np.array(T_); L_si = np.array(L_si); P_ = np.array(P_); ALT = np.array(ALT)
-    if p.t_cool > 0.0 and len(T_) > 1:                          # optional energy-conserving relaxation
-        dts = np.diff(np.concatenate([[p.tstart], T_]))
-        Lr = np.empty_like(L_si); prev = 0.0
-        for k in range(len(L_si)):
-            prev += (L_si[k] - prev) * (1.0 - math.exp(-dts[k] / p.t_cool))
-            Lr[k] = prev
-        L_si = Lr
-    L_bol = L_si / f_si                                         # bolometric = Si-band / in-band blackbody fraction
-    dts = np.diff(np.concatenate([[p.tstart], T_])) if len(T_) else np.array([])
-    E_rad_si_tot = float((L_si * dts).sum()) if len(T_) else 0.0
-    ke_end_active = float(sum(0.5 * m[k] * (vx[k] ** 2 + vz[k] ** 2) for k in np.flatnonzero(alive)))
-    closure = (KE0 + W_g_tot - E_dep_tot - KE_retired - ke_end_active) / KE0
+
+# ========================================================================================
+# 10. POST-PROCESSING
+# ========================================================================================
+def relax_light_curve(L_si, T, tstart, t_cool):
+    """Optional first-order radiative relaxation of the light curve (energy conserving).  [new]
+    Each sample moves toward the instantaneous power with time constant t_cool, mimicking the cooling time of the
+    hot gas.  The total radiated energy is unchanged; flares are smoothed and delayed.  t_cool = 0 disables it."""
+    dts = np.diff(np.concatenate([[tstart], T]))
+    Lr = np.empty_like(L_si)
+    prev = 0.0
+    for k in range(len(L_si)):
+        prev += (L_si[k] - prev) * (1.0 - math.exp(-dts[k] / t_cool))
+        Lr[k] = prev
+    return Lr
+
+
+def deposition_profile_metrics(dep_bins, bin_w):
+    """Characterise the dE/dh profile.  Returns (altitudes, dE/dh smoothed, i_peak, i_lo, i_hi, i_half_energy).
+
+    dE/dh is smoothed with a 3-bin boxcar.  i_lo/i_hi bound the contiguous region around the peak where dE/dh is at
+    least half of the peak value (the 'half-energy range').  i_half_energy is the altitude bin above which half of the
+    total deposited energy was released."""
+    nb = len(dep_bins)
     alt_c = (np.arange(nb) + 0.5) * bin_w
     dEdh = dep_bins / bin_w
     sm = np.convolve(dEdh, np.ones(3) / 3.0, mode="same")
@@ -534,20 +738,33 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
         lo -= 1
     while hi < nb - 1 and half[hi + 1]:
         hi += 1
-    cum_top = np.cumsum(dep_bins[::-1])[::-1]
+    cum_top = np.cumsum(dep_bins[::-1])[::-1]                # energy deposited above each bin
     ih = int(np.flatnonzero(cum_top >= 0.5 * dep_bins.sum())[-1]) if dep_bins.sum() > 0 else 0
+    return alt_c, dEdh, sm, ipk, lo, hi, ih
+
+
+def build_summary(p, st, rec: RunRecorder, T_, L_si, L_bol, ALT, V_, KE0, m0, f_si, wall0):
+    """Collect headline numbers, energy-closure check and warnings into one dictionary."""
+    dts = np.diff(np.concatenate([[p.tstart], T_])) if len(T_) else np.array([])
+    E_rad_si_tot = float((L_si * dts).sum()) if len(T_) else 0.0
+    # kinetic energy still carried by groups that are alive at the end (only non-zero if tstop was reached)
+    ke_end_active = float(sum(0.5 * st.m[k] * (st.vx[k] ** 2 + st.vz[k] ** 2) for k in np.flatnonzero(st.alive)))
+    # ENERGY CLOSURE: KE0 + gravity work = deposited + KE left behind (retired groups + still-flying groups)
+    closure = (KE0 + rec.W_g_tot - rec.E_dep_tot - rec.KE_retired - ke_end_active) / KE0
+    alt_c, dEdh, sm, ipk, lo, hi, ih = deposition_profile_metrics(rec.dep_bins, rec.bin_w)
     ipl = int(np.argmax(L_si)) if len(L_si) else 0
-    lit_end = np.flatnonzero(L_si > 0.01 * L_si.max()) if len(L_si) else np.array([], dtype=int)
-    lit_start = np.flatnonzero(L_si > 1e-6 * L_si.max()) if len(L_si) else np.array([], dtype=int)
-    first_yield = next((e for e in events if e["kind"] == "yield"), None)
+    lit_end = np.flatnonzero(L_si > 0.01 * L_si.max()) if len(L_si) else np.array([], dtype=int)     # last time above 1 % of peak
+    lit_start = np.flatnonzero(L_si > 1e-6 * L_si.max()) if len(L_si) else np.array([], dtype=int)   # first time above 1e-6 of peak
+    first_yield = next((e for e in rec.events if e["kind"] == "yield"), None)
+    retired = rec.retired
     summary = dict(
         KE0_J=KE0, KE0_kt=KE0 / JKT, m0=m0,
-        E_dep_J=E_dep_tot, E_dep_kt=E_dep_tot / JKT,
+        E_dep_J=rec.E_dep_tot, E_dep_kt=rec.E_dep_tot / JKT,
         E_rad_si_J=E_rad_si_tot, E_rad_bol_J=E_rad_si_tot / f_si,
         E_rad_bol_kt=E_rad_si_tot / f_si / JKT,
         band_fraction=f_si,
-        eta_si_overall=E_rad_si_tot / E_dep_tot if E_dep_tot > 0 else 0.0,
-        eta_bol_overall=E_rad_si_tot / f_si / E_dep_tot if E_dep_tot > 0 else 0.0,
+        eta_si_overall=E_rad_si_tot / rec.E_dep_tot if rec.E_dep_tot > 0 else 0.0,
+        eta_bol_overall=E_rad_si_tot / f_si / rec.E_dep_tot if rec.E_dep_tot > 0 else 0.0,
         peak_L_si_W=float(L_si.max()) if len(L_si) else 0.0,
         peak_I_si_W_sr=float(L_si.max()) / (4 * PI) if len(L_si) else 0.0,
         peak_L_bol_W=float(L_bol.max()) if len(L_bol) else 0.0,
@@ -564,36 +781,102 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
         first_yield_alt_km=first_yield["alt"] / 1e3 if first_yield else float("nan"),
         first_yield_q_MPa=first_yield["q"] / 1e6 if first_yield else float("nan"),
         first_yield_t=first_yield["t"] if first_yield else float("nan"),
-        n_split_events=sum(1 for e in events if e["kind"] == "split"),
-        split_refused=split_refused, n_groups_max=n_groups_max,
-        q_max_MPa=q_peak / 1e6, alt_q_max_km=alt_q_peak / 1e3, max_decel_g=a_max / G0,
-        mass_survived_kg=M_retired, mass_survived_frac=M_retired / m0,
+        n_split_events=sum(1 for e in rec.events if e["kind"] == "split"),
+        split_refused=rec.split_refused, n_groups_max=rec.n_groups_max,
+        q_max_MPa=rec.q_peak / 1e6, alt_q_max_km=rec.alt_q_peak / 1e3, max_decel_g=rec.a_max / G0,
+        mass_survived_kg=rec.M_retired, mass_survived_frac=rec.M_retired / m0,
         mass_survived_solid_frac=sum(r["mass"] for r in retired if not r["dust"]) / m0,
         mass_survived_dust_frac=sum(r["mass"] for r in retired if r["dust"]) / m0,
         ground_ke_J=float(sum(r["ke"] for r in retired if r["ground"])),
-        energy_closure=closure, reached_tstop=bool(alive.any()),
-        steps=nsteps, wall_s=time.time() - wall0,
+        energy_closure=closure, reached_tstop=bool(st.alive.any()),
+        steps=rec.nsteps, wall_s=time.time() - wall0,
         duration_s=float(T_[-1] - p.tstart) if len(T_) else 0.0,
         retired=retired,
     )
     warns = []
     if abs(closure) > 1e-6:
         warns.append(f"energy ledger closure {closure:.1e} exceeds 1e-6")
-    if split_refused:
-        warns.append(f"{split_refused} breakup(s) refused (group cap max_groups={NG} or m_min_frag) - raise max_groups?")
+    if rec.split_refused:
+        warns.append(f"{rec.split_refused} breakup(s) refused (group cap max_groups={p.max_groups} or m_min_frag) - raise max_groups?")
     if summary["reached_tstop"]:
         warns.append(f"stopped at tstop={p.tstop:.0f} s with groups still in flight")
     if summary["E_dep_kt"] < 0.5 * summary["KE0_kt"]:
         warns.append("less than half of the initial kinetic energy was deposited (body survives/skips?)")
     summary["warnings"] = warns
-    return BolumResult(p, T_, L_si, L_bol, P_, ALT, np.array(V_), np.array(M_), np.array(N_),
-                       np.array(Q_), L_si / np.maximum(P_, 1e-30), events, alt_c, dEdh, rad_bins / bin_w, summary)
+    return summary, alt_c, dEdh
 
 
-# ----------------------------------------------------------------------------------------
-# command-line report
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 11. THE DRIVER: run_bolide
+# ========================================================================================
+def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
+    """Simulate one entry event and return a BolumResult.  Reads as the 10-step recipe in the module docstring."""
+    wall0 = time.time()
+    # ---------- one-time set-up ----------
+    rho_b = p.density
+    m0 = 4.0 / 3.0 * PI * (0.5 * p.diameter) ** 3 * rho_b        # initial mass of the intact sphere
+    w_share = child_mass_shares(p)                                # how a breakup divides the mass among children
+    q_loss = p.emissivity * SIGMA_SB * p.T_ablate ** 4            # radiative loss at the ablation temperature (W/m^2)
+    m_dead = 1.0e-9 * m0                                          # below this mass a group counts as fully ablated
+    f_si = float(band_fraction(p.T_rad, p.sensor_lo_um, p.sensor_hi_um)[0])   # Si-band fraction of the blackbody
+    basis_si = p.tau_basis.lower() == "si"
+    legacy_S = [p.strength_secondary, p.strength_tertiary, p.strength_quaternary]
+    st = make_initial_state(p, m0)
+    rec = RunRecorder(p)
+    KE0 = 0.5 * m0 * p.velocity ** 2                              # initial kinetic energy
+    t = p.tstart
+
+    # ---------- time loop: one pass = one time step for all groups that are alive ----------
+    while st.alive.any() and t < p.tstop:
+        ia = np.flatnonzero(st.alive)                             # indices of the active groups
+        n_alive_before = int(st.alive.sum())
+        mi, xi, zi = st.m[ia], st.x[ia], st.z[ia]
+        vxi, vzi, fi, Si = st.vx[ia], st.vz[ia], st.f[ia], st.S[ia]
+        du = st.dust[ia]
+
+        # 1. local environment: altitude, speed, air density, stagnation-pressure loading
+        ri, alt, vi, rho, q = local_environment(xi, zi, vxi, vzi)
+        # 2. geometry: projected area (pancake growth / dust)
+        A, rs = projected_area(mi, fi, du, rho_b, p.dust_radius)
+        # 3. forces and heating: drag deceleration and ablation rate
+        F, a_dr = drag_deceleration(rho, vi, A, mi, p.Cd)
+        mdot = ablation_mass_rate(rho, vi, A, p.Lambda, q_loss, p.L_ablation)
+        # 4. yield check: loading >= strength -> the group yields, logs the event, and spreads sideways
+        yl = q >= Si
+        log_new_yields(st, ia, yl, t, alt, q, Si, rec.events)
+        dfdt = pancake_spreading_rate(yl, vi, rho, rho_b, rs, p.c_spread)
+        # 5. time step
+        dt = choose_time_step(p, mdot, mi, du, a_dr, vi, dfdt, fi)
+        # 6. advance mass, velocity, position, spread; compute the energy given to the atmosphere
+        up = advance_groups(p, dt, mi, xi, zi, vxi, vzi, fi, ri, vi, a_dr, mdot, dfdt, m_dead)
+        # 7. radiation: Si-band energy emitted this step
+        eta = radiative_efficiency(p, f_si, basis_si, vi, mi, A)
+        E_rad_si = eta * up.E_dep
+        # 8. record ledgers, dE/dh bins, light-curve samples
+        t += dt
+        rec.record_step(t, dt, alt, vi, q, a_dr, du, mi, up, E_rad_si, n_alive_before)
+        # commit the new state of the active groups
+        st.m[ia], st.x[ia], st.z[ia], st.vx[ia], st.vz[ia], st.f[ia] = up.mnew, up.xn, up.zn, up.vxn, up.vzn, up.fn
+        # 9. retire groups that burned up, hit the ground, or dropped below luminous speed
+        retire_groups(st, ia, up, du, p, t, rec)
+        # 10. split groups that have spread enough (progressive fragmentation + dust release)
+        rec.split_refused += split_spread_groups(st, p, w_share, legacy_S, t, rec.events)
+
+    # ---------- assemble the outputs ----------
+    T_ = np.array(rec.T); L_si = np.array(rec.L_si); P_ = np.array(rec.P); ALT = np.array(rec.ALT)
+    if p.t_cool > 0.0 and len(T_) > 1:
+        L_si = relax_light_curve(L_si, T_, p.tstart, p.t_cool)
+    L_bol = L_si / f_si                                           # bolometric = Si-band / in-band blackbody fraction
+    summary, alt_c, dEdh = build_summary(p, st, rec, T_, L_si, L_bol, ALT, np.array(rec.V), KE0, m0, f_si, wall0)
+    return BolumResult(p, T_, L_si, L_bol, P_, ALT, np.array(rec.V), np.array(rec.M), np.array(rec.N),
+                       np.array(rec.Q), L_si / np.maximum(P_, 1e-30), rec.events, alt_c, dEdh, rec.rad_bins / rec.bin_w, summary)
+
+
+# ========================================================================================
+# 12. COMMAND-LINE REPORT
+# ========================================================================================
 def format_report(res: BolumResult, max_events=12):
+    """Human-readable run report (printed to the terminal and saved as run_report.txt)."""
     p, s = res.params, res.summary
     L = []
     add = L.append
@@ -647,15 +930,17 @@ def format_report(res: BolumResult, max_events=12):
     return "\n".join(L)
 
 
-# ----------------------------------------------------------------------------------------
-# output files
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 13. OUTPUT FILES
+# ========================================================================================
 def make_header(p: BolumParams):
+    """One-line description of the event, printed at the top of every plot."""
     return (f"v = {p.velocity/1e3:.2f} km/s   d = {p.diameter:.2f} m   theta = {p.theta_deg:.1f} deg   "
             f"S0 = {p.strength0()/1e6:.2f} MPa (rho v^2)   rho = {p.density:.0f} kg/m3")
 
 
 def write_outputs(outdir, res: BolumResult):
+    """Write all data files into the event folder."""
     p, s = res.params, res.summary
     os.makedirs(outdir, exist_ok=True)
     with open(os.path.join(outdir, "init_params.dat"), "w") as fh:
@@ -691,14 +976,14 @@ def write_outputs(outdir, res: BolumResult):
         fh.write(format_report(res, max_events=40) + "\n")
 
 
-# ----------------------------------------------------------------------------------------
-# standardized plotting
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 14. STANDARDIZED PLOTTING
+# ========================================================================================
 C_SI, C_BOL, C_DEP, C_PUB, C_BRK, C_SAT = "#1f77b4", "#ff7f0e", "black", "crimson", "seagreen", "purple"
 
 
 def _alt_window(res):
-    """Altitude window common to all altitude panels: where L_si > 1e-6 of peak, padded."""
+    """Altitude window common to all altitude panels: where L_si > 1e-6 of peak, padded by 4 km."""
     lit = np.flatnonzero(res.L_si > 1e-6 * res.L_si.max()) if len(res.L_si) else []
     if len(lit) == 0:
         return 0.0, 100.0
@@ -719,6 +1004,7 @@ def _time_log_window(res, decades=10.0):
 
 
 def model_metric_rows(res):
+    """Rows (label, model value, published value, ok-flag) for the metrics table; model-only here."""
     s = res.summary
     return [
         ("KE0 (kt)", f"{s['KE0_kt']:.4g}", "", None),
@@ -834,6 +1120,7 @@ def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
 
 
 def plot_outputs(outdir, res: BolumResult, ref=None, rows=None, sat_W=None, title=None):
+    """Write bolide_plots.pdf: the standardized summary page followed by single-quantity pages."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -912,9 +1199,9 @@ def plot_outputs(outdir, res: BolumResult, ref=None, rows=None, sat_W=None, titl
     pdf.close()
 
 
-# ----------------------------------------------------------------------------------------
-# main
-# ----------------------------------------------------------------------------------------
+# ========================================================================================
+# 15. MAIN
+# ========================================================================================
 def main(argv=None):
     ap = argparse.ArgumentParser(description=f"bolum v{__version__} bolide model")
     ap.add_argument("event", nargs="?", help="event folder name containing bolum_in.dat")

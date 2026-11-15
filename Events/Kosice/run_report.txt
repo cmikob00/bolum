@@ -1,5 +1,5 @@
 ====================================================================================================
- bolum v2.1 run report
+ bolum v2.2 run report
 ====================================================================================================
  INPUT
    body            d = 1.250 m   m0 = 3.4770e+03 kg   rho = 3400 kg/m3
@@ -51,6 +51,6 @@
  SURVIVORS
    solid 19.63% and dust 14.32% of m0 left luminous flight (< 3.0 km/s) or reached the ground;  ground-impact KE 0.00e+00 J
  RUN
-   2355 steps, simulated 7.0 s, wall time 0.94 s
+   2355 steps, simulated 7.0 s, wall time 1.00 s
    no warnings
 ====================================================================================================

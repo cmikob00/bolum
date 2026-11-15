@@ -1,8 +1,8 @@
-Initialization Parameters for Bolide Luminosity and Fragmentation Simulation (bolum v2.1)
+Initialization Parameters for Bolide Luminosity and Fragmentation Simulation (bolum v2.2)
 diameter               19.6
 velocity               19160.0
 theta_deg              18.3
-init_strength          700000.0
+init_strength          1400000.0
 density                3300.0
 porosity               0.1
 Cd                     1.0

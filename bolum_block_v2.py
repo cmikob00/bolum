@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_block_v2.py  (version 2.2)  --  reduced-order bolide entry / fragmentation / luminosity model
+bolum_block_v2.py  (version 2.3.1)  --  reduced-order bolide entry / fragmentation / luminosity model
 
-VERSION 2.2 IS A STRUCTURAL REFACTOR OF 2.1: THE PHYSICS AND THE NUMBERS ARE IDENTICAL.
+VERSION 2.3.1: the light-curve feature letters now appear only on the feature-guide page (page 2 of bolide_plots.pdf), not on the
+standard summary page.  Nothing else changed.
+VERSION 2.3 ADDS LIGHT-CURVE FEATURE ANALYSIS (when and why the light curve changes character).  THE PHYSICS AND ALL
+PREVIOUS NUMBERS ARE IDENTICAL TO 2.2 (verified bit-for-bit); new output only.
+VERSION 2.2 WAS A STRUCTURAL REFACTOR OF 2.1: THE PHYSICS AND THE NUMBERS ARE IDENTICAL.
   The big time-stepping loop has been broken into small, named, commented functions so that each physical
   process can be read (and later modified) on its own.  Every function below says WHAT it computes, WHY, and
   which equation / reference it comes from.  Nothing about the model itself changed (verified bit-for-bit
@@ -37,6 +41,18 @@ ENERGY BOOK-KEEPING (why the ledger closes exactly)
 
 PROVENANCE KEY:  [lit] taken from the literature   [adapt] literature form, adapted   [cal] value calibrated here
                  [new] construct introduced here (no direct published equivalent)
+
+GLOSSARY: YIELD vs BREAKUP vs FLARE  (three different kinds of thing)
+  yield     A MODEL EVENT for one group.  The group's loading rho*v^2 has reached its strength S.  From then on it is
+            squeezed and spreads sideways (pancake), so its area, drag and heating grow.  Nothing is split yet; mass and
+            number of groups are unchanged.  Logged once per group as kind='yield' in events.dat.
+  breakup   A MODEL EVENT for one group (logged as kind='split').  A yielding group has spread until its linear size grew
+            by f_split; it is replaced by n children (stronger, by Weibull scaling) plus a dust group.  This is when the
+            number of groups increases.  Order for any one group:  yield  ->  (spreading)  ->  breakup.
+  flare     A LIGHT-CURVE FEATURE you would see in the data, found by analyze_light_curve(): a rise in L steeper than the
+            air-density tracking rate.  It is an effect, not a cause.  A flare can come from a breakup (dust release),
+            from pancake growth after a yield with no breakup yet, or from several of these overlapping; and a breakup of a
+            small group may not produce a visible flare at all.  The feature notes list which events lie within the flare.
 
 USAGE
   python3 bolum_block_v2.py EVENT [--base DIR] [--no-plots] [--quiet] [--sat-W WATTS]
@@ -87,16 +103,21 @@ REFERENCES
         atmosphere, Icarus 89, 26-43.   Radiative loss vs. heating at the surface (ablation-onset idea).
   [R21] Korycansky & Zahnle (2005), Modeling crater populations on Venus and Titan, Planet. Space Sci. 53, 695-710
         (pages from memory - verify).   Transverse dispersion velocity v_t = (0.41 rho/rho_body)^0.5 v.
+  [R22] Jenniskens, Pilorz, Robertson & Stern (2026), Bolide light curve systematics from 75 recovered meteorites,
+        Meteorit. Planet. Sci. 61(9), 2351-2392, doi:10.1111/maps.70203.  Seven-phase description of bolide light curves
+        vs altitude (used only to LABEL features in the analysis; the model does not implement their melting, spin or
+        plasma-instability physics).
   [T1]  Standard textbook physics: Planck's law (band fraction); Rayleigh pitot / Newtonian hypersonic stagnation
         pressure (p_stag = 0.92 rho v^2 for gamma = 1.4, -> rho v^2 for strong shocks).
 """
-__version__ = "2.2"
+__version__ = "2.3.1"
 
 import os
 import sys
 import time
 import math
 import argparse
+import textwrap
 from dataclasses import dataclass, fields, field
 import numpy as np
 
@@ -352,6 +373,10 @@ class BolumResult:
     dEdh_dep: np.ndarray       # J per m of altitude
     dEdh_rad_si: np.ndarray
     summary: dict = field(default_factory=dict)
+    P_drag: np.ndarray = None      # power given to the air by drag work (W), time series
+    P_abl: np.ndarray = None       # power carried off as kinetic energy of ablated mass (W), time series
+    L_si_dust: np.ndarray = None   # part of L_si emitted by dust groups (W)
+    features: list = field(default_factory=list)   # light-curve features (see analyze_light_curve)
 
 
 # ========================================================================================
@@ -666,6 +691,8 @@ class RunRecorder:
         self.dep_bins = np.zeros(self.nb)                    # energy deposited in each altitude bin (J)
         self.rad_bins = np.zeros(self.nb)                    # Si-band energy radiated in each altitude bin (J)
         self.T, self.L_si, self.P, self.ALT, self.V, self.M, self.N, self.Q = [], [], [], [], [], [], [], []
+        self.P_drag, self.P_abl, self.L_dust = [], [], []   # which channel deposits the energy / how much light is from dust
+        self.t_abl_onset, self.alt_abl_onset = None, float('nan')   # first time any group ablates
         self.events = []                                     # yield and split events
         self.retired = []                                    # groups that left the simulation with mass
         self.E_dep_tot = self.E_rad_tot = self.W_g_tot = 0.0  # running energy totals
@@ -676,7 +703,7 @@ class RunRecorder:
         self.q_peak, self.alt_q_peak = 0.0, float("nan")     # largest loading and where it occurred
         self.nsteps = 0
 
-    def record_step(self, t, dt, alt, v, q, a_drag, du, m_before, up: StepUpdate, E_rad_si, n_alive_before):
+    def record_step(self, t, dt, alt, v, q, a_drag, du, m_before, up: StepUpdate, E_rad_si, n_alive_before, mdot):
         """Log one step.  `t` is the time at the END of the step."""
         E_dep_s, W_g_s = float(up.E_dep.sum()), float(up.W_g.sum())
         self.E_dep_tot += E_dep_s
@@ -702,6 +729,13 @@ class RunRecorder:
         self.N.append(int((up.mnew > 0).sum()))
         self.Q.append(float(q.max()))
         self.n_groups_max = max(self.n_groups_max, n_alive_before)
+        # --- extra series for the light-curve analysis (do not affect any physics) ---
+        self.P_drag.append(float(up.E_drag.sum()) / dt)
+        self.P_abl.append(float(up.E_abl.sum()) / dt)
+        self.L_dust.append(float(E_rad_si[du].sum()) / dt)
+        if self.t_abl_onset is None and mdot.max() > 0:      # ablation begins: remember when and where
+            self.t_abl_onset = t - dt
+            self.alt_abl_onset = float(alt[int(np.argmax(mdot))])
         self.nsteps += 1
 
 
@@ -854,7 +888,7 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
         E_rad_si = eta * up.E_dep
         # 8. record ledgers, dE/dh bins, light-curve samples
         t += dt
-        rec.record_step(t, dt, alt, vi, q, a_dr, du, mi, up, E_rad_si, n_alive_before)
+        rec.record_step(t, dt, alt, vi, q, a_dr, du, mi, up, E_rad_si, n_alive_before, mdot)
         # commit the new state of the active groups
         st.m[ia], st.x[ia], st.z[ia], st.vx[ia], st.vz[ia], st.f[ia] = up.mnew, up.xn, up.zn, up.vxn, up.vzn, up.fn
         # 9. retire groups that burned up, hit the ground, or dropped below luminous speed
@@ -868,8 +902,238 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
         L_si = relax_light_curve(L_si, T_, p.tstart, p.t_cool)
     L_bol = L_si / f_si                                           # bolometric = Si-band / in-band blackbody fraction
     summary, alt_c, dEdh = build_summary(p, st, rec, T_, L_si, L_bol, ALT, np.array(rec.V), KE0, m0, f_si, wall0)
-    return BolumResult(p, T_, L_si, L_bol, P_, ALT, np.array(rec.V), np.array(rec.M), np.array(rec.N),
-                       np.array(rec.Q), L_si / np.maximum(P_, 1e-30), rec.events, alt_c, dEdh, rec.rad_bins / rec.bin_w, summary)
+    summary["t_ablation_onset"] = rec.t_abl_onset if rec.t_abl_onset is not None else float("nan")
+    summary["alt_ablation_onset_km"] = rec.alt_abl_onset / 1e3
+    res = BolumResult(p, T_, L_si, L_bol, P_, ALT, np.array(rec.V), np.array(rec.M), np.array(rec.N),
+                      np.array(rec.Q), L_si / np.maximum(P_, 1e-30), rec.events, alt_c, dEdh, rec.rad_bins / rec.bin_w, summary,
+                      P_drag=np.array(rec.P_drag), P_abl=np.array(rec.P_abl), L_si_dust=np.array(rec.L_dust))
+    res.features, lc_stats = analyze_light_curve(res)          # 15. light-curve feature analysis (new in 2.3)
+    summary.update(lc_stats)
+    return res
+
+
+
+# ========================================================================================
+# 11b. LIGHT-CURVE FEATURE ANALYSIS  (new in 2.3; reads the finished run, changes no physics)
+# ========================================================================================
+def _moving_average(y, n):
+    """Boxcar smoothing with edge padding (n samples)."""
+    k = np.ones(n) / n
+    yp = np.concatenate([np.full(n, y[0]), y, np.full(n, y[-1])])
+    return np.convolve(yp, k, mode="same")[n:-n]
+
+
+def _moving_median(y, n):
+    """Running median over n samples (edge padded); used as the 'local trend' when looking for small bumps."""
+    n += (n + 1) % 2                                       # make the window odd
+    h = n // 2
+    yp = np.concatenate([np.full(h, y[0]), y, np.full(h, y[-1])])
+    return np.median(np.lib.stride_tricks.sliding_window_view(yp, n), axis=1)
+
+
+def analyze_light_curve(res, k_flare=3.0, min_rise=1.25, bump_min=0.04):
+    """Find and classify the features of the light curve.  Returns (features, stats).
+
+    WHY: a light curve changes character for several different reasons, and only some of them are real physics.
+    Each feature gets a `flag`:
+        physical        a real process that the model represents with reasonable fidelity
+        stylized        a real process, but the SHAPE, SHARPNESS or NUMBER of the feature is set by the model's rules
+                        (instant dust release, fixed 4-child cascade, sharp ablation threshold), so do not over-read it
+        artifact        a numerical / bookkeeping effect (groups removed when they slow below v_dark)
+        low-confidence  region controlled by artifacts or by assumptions outside the model's range
+        info            bookkeeping marker (e.g. the arbitrary first-light threshold)
+
+    THE REFERENCE RATE.  If the light simply tracked the air density along the path, ln L would grow at
+        s_atm = (descent speed) / (density scale height) = v sin(theta) / H(alt)    (about 1-2 per second).
+    A 'flare' is a rise in ln L steeper than k_flare * s_atm (and at least 2 per second) that lifts L by at least
+    min_rise (default 25 %).  A 'bump' is a smaller local maximum (>= bump_min above the local trend) that is not part of
+    a flare.  Both are matched to breakup events in time (flare: +-0.05 s, bump: +-0.1 s).
+
+    LABELLING TO REAL LIGHT CURVES.  Jenniskens et al. (2026) [R22] describe seven phases in camera light curves of
+    recovered meteorite falls.  The model has analogues of only some of them (see notes on each feature)."""
+    p, s = res.params, res.summary
+    t, L = res.t, res.L_si
+    stats = {}
+    if len(t) < 20 or not (L.max() > 0):
+        return [], stats
+    peak = float(L.max())
+    ipk = int(np.argmax(L))
+    sin0 = math.sin(math.radians(p.theta_deg))
+    dts = np.diff(np.concatenate([[p.tstart], t]))
+    feats = []
+
+    def add(kind, tag, tt, flag, note, **extra):
+        feats.append(dict(kind=kind, tag=tag, t=float(tt), alt_km=float(np.interp(tt, t, res.alt)) / 1e3,
+                          L_si=float(np.interp(tt, t, L)), flag=flag, note=note, **extra))
+
+    def ev_near(ta, tb, pad):
+        return [e for e in res.events if ta - pad <= e["t"] <= tb + pad]
+
+    # ---- 1. first light (arbitrary visibility threshold) ----
+    t_first = s["t_first_light"] if np.isfinite(s["t_first_light"]) else t[0]
+    add("first_light", "", t_first, "info", "L_si first exceeds 1e-6 of its peak. This is just a visibility threshold; the real value depends on "
+        "your sensor floor and on where the simulation starts (zstart).")
+
+    # ---- 2. ablation onset: where the model's light changes from drag-only to ablation-driven ----
+    t_on = s.get("t_ablation_onset", float("nan"))
+    if np.isfinite(t_on):
+        add("ablation_onset", "A", t_on, "stylized",
+            f"Net heating flux first exceeds radiative loss at T_ablate = {p.T_ablate:.0f} K, so ablation switches on (a kink in the slope). "
+            f"Real onset is gradual over a few km. BELOW this point the model's light is drag work only (no ablated material): treat "
+            f"light above ~{s['alt_ablation_onset_km']:.0f} km as low-confidence. Loosely like the end of Phase 1 / start of Phase 2 in [R22], "
+            f"but the model has no spin, volatile (Na/K) emission or melt physics.")
+    # ---- 3. first yield and first breakup (pancake phase) ----
+    ys = next((e for e in res.events if e["kind"] == "yield"), None)
+    sp1 = next((e for e in res.events if e["kind"] == "split"), None)
+    if ys is not None:
+        add("first_yield", "Y", ys["t"], "physical",
+            f"Loading rho v^2 reaches S0 = {ys['strength']/1e6:.3g} MPa. The body starts to flatten (pancake): area, drag and heating all grow, so "
+            f"the light rises faster. Analogue of the onset of fragmentation (Phase 5 / H_f in [R22]).")
+    if sp1 is not None:
+        extra = ""
+        if ys is not None:
+            ratio = float(np.interp(sp1["t"], t, L)) / max(float(np.interp(ys["t"], t, L)), 1e-30)
+            extra = f" Light grew x{ratio:.1f} between first yield and this breakup (pancake spreading)."
+        add("first_breakup", "B", sp1["t"], "stylized",
+            f"Spread factor reached f_split = {p.f_split:g}: the body breaks into {p.n_fragments} children plus {p.dust_frac*100:.0f} % of its mass as dust. "
+            f"The dust has a large area-to-mass ratio, decelerates and ablates within a fraction of a second, which makes a sharp flare. "
+            f"The instantaneous release is a model simplification.{extra}")
+
+    # ---- 4/5. flares and bumps from the log-slope of the light curve ----
+    flares = []
+    t0 = float(max(t_first, t[0])); t1 = float(t[-1])
+    du = float(np.clip((t1 - t0) / 3000.0, 1e-3, 5e-3))
+    grid = np.arange(t0, t1, du)
+    if len(grid) > 50:
+        floor = 1e-9 * peak
+        yg = np.log(np.maximum(np.interp(grid, t, L), floor))
+        nsm = max(3, int(round(0.03 / du)))
+        ysm = _moving_average(yg, nsm)
+        slope = np.gradient(ysm, du)
+        alt_g, v_g = np.interp(grid, t, res.alt), np.interp(grid, t, res.v)
+        invH = (np.log(ATM.rho(alt_g - 250.0)) - np.log(ATM.rho(alt_g + 250.0))) / 500.0   # 1 / density scale height
+        s_atm = v_g * sin0 * invH
+        hot = slope > np.maximum(k_flare * s_atm, 2.0)
+        runs, i, n = [], 0, len(hot)
+        while i < n:
+            if hot[i]:
+                j = i
+                while j + 1 < n and hot[j + 1]:
+                    j += 1
+                if runs and (i - runs[-1][1]) * du < 0.03:
+                    runs[-1][1] = j
+                else:
+                    runs.append([i, j])
+                i = j + 1
+            else:
+                i += 1
+        for i, j in runs:
+            i0, j0 = max(i - nsm, 0), min(j + nsm, n - 1)
+            if ysm[j0] - ysm[i0] < math.log(min_rise):
+                continue
+            ta, tb = float(grid[i0]), float(grid[j0])
+            La, Lb = float(np.interp(ta, t, L)), float(np.interp(tb, t, L))
+            near = ev_near(ta, tb, 0.05)
+            dust_share = float("nan")
+            if res.L_si_dust is not None and Lb > La:
+                dust_share = (float(np.interp(tb, t, res.L_si_dust)) - float(np.interp(ta, t, res.L_si_dust))) / (Lb - La)
+            nsplit = sum(1 for e in near if e["kind"] == "split")
+            if near:
+                what = ("; ".join(f"{e['kind']} gen {e['gen']} at {e['alt']/1e3:.1f} km ({e['mass']/s['m0']*100:.0f}% of m0)" for e in near[:3])
+                        + (f" +{len(near)-3} more" if len(near) > 3 else ""))
+            else:
+                what = "no breakup within 0.05 s (growth of existing pancakes)"
+            dtxt = f" Dust groups supply {100*dust_share:.0f}% of the rise." if np.isfinite(dust_share) else ""
+            flares.append((ta, tb))
+            add("flare", "F", 0.5 * (ta + tb), "stylized",
+                f"Light rises x{Lb/max(La,1e-30):.1f} in {tb-ta:.2f} s (steeper than {k_flare:g}x the air-density tracking rate). Associated with: {what}.{dtxt} "
+                f"A real fragmentation flare (Phase 5 in [R22]); its sharpness and timing here come from the model's deterministic cascade.",
+                t_start=ta, t_end=tb, rise=Lb / max(La, 1e-30), n_splits=nsplit, dust_share=dust_share)
+        # bumps: small local maxima not already part of a flare
+        win = max(int(round(0.6 / du)), nsm * 3)
+        detr = ysm - _moving_median(ysm, win)
+        w = max(2, int(round(0.08 / du)))
+        cand = []
+        for i in range(w, n - w):
+            if detr[i] > bump_min and detr[i] >= detr[i - w:i + w + 1].max():
+                tt = float(grid[i])
+                if any(ta - 0.1 <= tt <= tb + 0.1 for ta, tb in flares):
+                    continue
+                if cand and tt - cand[-1][0] < 0.1:
+                    if detr[i] > cand[-1][1]:
+                        cand[-1] = (tt, float(detr[i]))
+                    continue
+                cand.append((tt, float(detr[i])))
+        for tt, h in cand:
+            near = ev_near(tt, tt, 0.1)
+            if near:
+                e = min(near, key=lambda e: abs(e["t"] - tt))
+                what = f"coincides with a {e['kind']} (gen {e['gen']}) at {e['alt']/1e3:.1f} km"
+            else:
+                what = "no breakup within 0.1 s (overlap of several groups' light / pancake growth)"
+            add("bump", "b", tt, "stylized", f"Small fluctuation, {100*(math.exp(h)-1):.0f}% above the local trend; {what}. "
+                f"The fine structure of this phase is set by the cascade rules, so its pattern is not predictive of a real event.", height=h)
+
+    # ---- 6. peak, 7. roll-off ----
+    add("peak", "P", t[ipk], "physical",
+        f"Maximum light. It sits ~{s['alt_peak_L_km']-s['alt_peak_dEdh_km']:+.1f} km from the peak of energy deposition ({s['alt_peak_dEdh_km']:.1f} km) because the "
+        f"luminous efficiency tau(v) falls as the fragments slow (mass-weighted speed here {s['v_at_peak_L_kms']:.1f} km/s).")
+    after = np.flatnonzero(L[ipk:] < peak / math.e)
+    if len(after):
+        k = ipk + int(after[0])
+        add("rolloff", "D", t[k], "physical",
+            f"Light has fallen to 1/e of the peak {t[k]-t[ipk]:.2f} s after it. Cause: the kinetic energy is being used up (speed {res.v[k]/p.velocity*100:.0f}% of v0, "
+            f"{res.mass[k]/s['m0']*100:.0f}% of the mass still in flight) and tau(v) drops with speed. Analogue of Phase 7 (decline until dark flight) in [R22].")
+        stats["lc_decay_efold_s"] = float(t[k] - t[ipk])
+    # drag overtakes ablation as the main energy channel
+    if res.P_drag is not None:
+        idx = np.flatnonzero((res.P_drag > res.P_abl) & (L > 1e-3 * peak) & (t > (ys["t"] if ys else t[0])))
+        if len(idx):
+            add("drag_overtakes_ablation", "", t[idx[0]], "stylized",
+                "Drag work now exceeds the kinetic energy carried off by ablated mass. The ratio ablation/drag is about Lambda v^2/(2 Q Cd), so this happens "
+                f"when the speed falls below ~{math.sqrt(2*p.L_ablation*p.Cd/p.Lambda)/1e3:.0f} km/s (from the model's heating law).")
+    tail = np.flatnonzero(L[ipk:] < 1e-3 * peak)
+    if len(tail):
+        add("tail", "T", t[ipk + int(tail[0])], "low-confidence",
+            f"Below 1e-3 of the peak the light is controlled by groups being retired when they slow below v_dark = {p.v_dark/1e3:.1f} km/s and by the "
+            f"tau taper (2-4 km/s). Do not interpret structure below this level.")
+    # ---- 10. retirement steps (artifact) ----
+    last = -9.0
+    nart = 0
+    for r in s.get("retired", []):
+        tr = r["t"]
+        if tr - last < 0.02:
+            continue
+        Lb_, La_ = float(np.interp(tr - 0.015, t, L)), float(np.interp(tr + 0.015, t, L))
+        if Lb_ > 1e-4 * peak and La_ < 0.85 * Lb_ and nart < 6:
+            add("retirement_step", "R", tr, "artifact",
+                f"A group is removed because it slowed below v_dark = {p.v_dark/1e3:.1f} km/s; the light drops {100*(1-La_/Lb_):.0f}% within 0.03 s. "
+                f"A bookkeeping step, not a physical dimming.")
+            nart += 1
+            last = tr
+    feats.sort(key=lambda f_: f_["t"])
+    for k, f_ in enumerate(feats, 1):
+        f_["id"] = k
+
+    # ---- summary statistics ----
+    E = np.cumsum(L * dts)
+    Etot = float(E[-1]) if E[-1] > 0 else 1.0
+    for frac in (0.1, 0.5, 0.9):
+        tf = float(np.interp(frac * Etot, E, t))
+        stats[f"lc_t{int(frac*100)}"] = tf
+        stats[f"lc_alt{int(frac*100)}_km"] = float(np.interp(tf, t, res.alt)) / 1e3
+    above = L >= 0.5 * peak
+    stats["lc_fwhm_s"] = float((dts * above).sum())
+    i10 = np.flatnonzero(L[:ipk + 1] >= 0.1 * peak)
+    stats["lc_rise_time_s"] = float(t[ipk] - t[i10[0]]) if len(i10) else float("nan")
+    stats["lc_E_prefrag_frac"] = float(np.interp(ys["t"], t, E)) / Etot if ys else float("nan")
+    stats["lc_dust_E_frac"] = float((res.L_si_dust * dts).sum()) / Etot if res.L_si_dust is not None else float("nan")
+    if res.P_drag is not None:
+        Ed, Ea = float((res.P_drag * dts).sum()), float((res.P_abl * dts).sum())
+        stats["lc_ablation_E_frac"] = Ea / (Ed + Ea) if (Ed + Ea) > 0 else float("nan")
+    stats["lc_n_flares"] = sum(1 for f_ in feats if f_["kind"] == "flare")
+    stats["lc_n_bumps"] = sum(1 for f_ in feats if f_["kind"] == "bump")
+    return feats, stats
 
 
 # ========================================================================================
@@ -916,6 +1180,29 @@ def format_report(res: BolumResult, max_events=12):
     add(f"   efficiency      bolometric {100*s['eta_bol_overall']:.2f}% / Si-band {100*s['eta_si_overall']:.2f}% of deposited energy")
     kt_b = 8.2508 * max(s['E_rad_bol_kt'], 1e-12) ** 0.885
     add(f"   Brown+2002 check  E_total = 8.2508 E_rad^0.885 -> {kt_b:.3f} kt  (model KE0 = {s['KE0_kt']:.3f} kt, ratio {kt_b/s['KE0_kt']:.2f}; population scatter ~x2)")
+    add(" LIGHT-CURVE FEATURES   (heuristic classifier; flags: physical = real process | stylized = real process but its shape/number is set by model rules |")
+    add("                         artifact = bookkeeping effect | low-confidence = controlled by artifacts)")
+    if res.features:
+        add("   id tag  kind                       t(s)  alt(km)     L_si(W)  flag")
+        shown = 0
+        for f_ in res.features:
+            if f_["kind"] == "bump" and shown >= 8:
+                continue
+            add(f"   {f_['id']:>2d}  {f_['tag'] or '-':<3s} {f_['kind']:<22s} {f_['t']-p.tstart:7.3f} {f_['alt_km']:8.2f} {f_['L_si']:11.3e}  {f_['flag']}")
+            for ln in textwrap.wrap(f_["note"], width=92):
+                add("          " + ln)
+            shown += 1 if f_["kind"] == "bump" else 0
+        nb_ = sum(1 for f_ in res.features if f_["kind"] == "bump")
+        if nb_ > 8:
+            add(f"   ... {nb_-8} more bumps in light_curve_features.dat")
+        add(f"   timing          10/50/90 % of the radiated energy by t = {s['lc_t10']-p.tstart:.2f} / {s['lc_t50']-p.tstart:.2f} / {s['lc_t90']-p.tstart:.2f} s  "
+            f"(~{s['lc_alt10_km']:.0f} / {s['lc_alt50_km']:.0f} / {s['lc_alt90_km']:.0f} km)")
+        add(f"   shape           time above half-peak {s['lc_fwhm_s']:.2f} s;  rise (10% -> peak) {s['lc_rise_time_s']:.2f} s;  decay e-fold {s.get('lc_decay_efold_s', float('nan')):.2f} s")
+        add(f"   budget          radiated before first yield {100*s['lc_E_prefrag_frac']:.1f}%;  from dust groups {100*s['lc_dust_E_frac']:.1f}%;  "
+            f"ablation supplies {100*s.get('lc_ablation_E_frac', float('nan')):.0f}% of the deposited energy, drag the rest")
+        add(f"   counts          {s['lc_n_flares']} flares, {s['lc_n_bumps']} small bumps")
+    else:
+        add("   (no features detected)")
     add(" SURVIVORS")
     add(f"   solid {100*s['mass_survived_solid_frac']:.2f}% and dust {100*s['mass_survived_dust_frac']:.2f}% of m0 left luminous flight (< {p.v_dark/1e3:.1f} km/s) or reached the ground;"
         f"  ground-impact KE {s['ground_ke_J']:.2e} J")
@@ -948,10 +1235,11 @@ def write_outputs(outdir, res: BolumResult):
         for fl in fields(BolumParams):
             fh.write(f"{fl.name:22s} {getattr(p, fl.name)}\n")
     with open(os.path.join(outdir, "bolide_out.dat"), "w") as fh:
-        fh.write("# time_s  alt_km  v_kms  mass_kg  n_groups  P_dep_W  L_si_W  L_bol_W  eta_si  loading_max_Pa\n")
+        fh.write("# time_s  alt_km  v_kms  mass_kg  n_groups  P_dep_W  L_si_W  L_bol_W  eta_si  loading_max_Pa  P_drag_W  P_abl_W  L_si_dust_W\n")
         for k in range(len(res.t)):
             fh.write(f"{res.t[k]:.5f} {res.alt[k]/1e3:.4f} {res.v[k]/1e3:.4f} {res.mass[k]:.5e} {res.n_groups[k]:d} "
-                     f"{res.P_dep[k]:.5e} {res.L_si[k]:.5e} {res.L_bol[k]:.5e} {res.eta_eff[k]:.5f} {res.q_max[k]:.5e}\n")
+                     f"{res.P_dep[k]:.5e} {res.L_si[k]:.5e} {res.L_bol[k]:.5e} {res.eta_eff[k]:.5f} {res.q_max[k]:.5e} "
+                     f"{res.P_drag[k]:.5e} {res.P_abl[k]:.5e} {res.L_si_dust[k]:.5e}\n")
     with open(os.path.join(outdir, "power_vs_time.dat"), "w") as fh:
         fh.write("# L_si_W  time_s  L_bol_W\n")
         for k in range(len(res.t)):
@@ -968,6 +1256,10 @@ def write_outputs(outdir, res: BolumResult):
         fh.write("# kind  t_s  alt_km  loading_MPa  mass_kg  strength_MPa  generation\n")
         for e in res.events:
             fh.write(f"{e['kind']} {e['t']:.4f} {e['alt']/1e3:.3f} {e['q']/1e6:.4f} {e['mass']:.4e} {e['strength']/1e6:.4f} {e['gen']}\n")
+    with open(os.path.join(outdir, "light_curve_features.dat"), "w") as fh:
+        fh.write("# id  tag  kind  t_s  alt_km  L_si_W  flag  note\n")
+        for f_ in res.features:
+            fh.write(f"{f_['id']} {f_['tag'] or '-'} {f_['kind']} {f_['t']:.4f} {f_['alt_km']:.3f} {f_['L_si']:.4e} {f_['flag']}  {f_['note']}\n")
     with open(os.path.join(outdir, "summary.dat"), "w") as fh:
         for k, v in s.items():
             if k not in ("retired", "warnings"):
@@ -1011,7 +1303,7 @@ def model_metric_rows(res):
         ("deposited energy (kt)", f"{s['E_dep_kt']:.4g}", "", None),
         ("first yield alt (km)", f"{s['first_yield_alt_km']:.1f}", "", None),
         ("breakups", f"{s['n_split_events']}", "", None),
-        ("peak dE/dh (kt/km @ km)", f"{s['peak_dEdh_kt_per_km']:.1f} @ {s['alt_peak_dEdh_km']:.1f}", "", None),
+        ("peak dE/dh (kt/km @ km)", f"{s['peak_dEdh_kt_per_km']:.3g} @ {s['alt_peak_dEdh_km']:.1f}", "", None),
         ("half-peak range (km)", f"{s['half_range_km'][0]:.1f}-{s['half_range_km'][1]:.1f}", "", None),
         ("peak L_Si (W)", f"{s['peak_L_si_W']:.2e}", "", None),
         ("peak I_Si (W/sr)", f"{s['peak_I_si_W_sr']:.2e}", "", None),
@@ -1019,6 +1311,9 @@ def model_metric_rows(res):
         ("E_rad bolometric (kt)", f"{s['E_rad_bol_kt']:.4g}", "", None),
         ("bolometric efficiency", f"{100*s['eta_bol_overall']:.1f}%", "", None),
         ("luminous end alt (km)", f"{s['alt_end_lum_km']:.1f}", "", None),
+        ("flares / bumps found", f"{s.get('lc_n_flares', 0)} / {s.get('lc_n_bumps', 0)}", "", None),
+        ("time above half-peak (s)", f"{s.get('lc_fwhm_s', float('nan')):.2f}", "", None),
+        ("radiated before 1st yield", f"{100*s.get('lc_E_prefrag_frac', float('nan')):.1f}%", "", None),
         ("energy-ledger closure", f"{s['energy_closure']:.1e}", "", None),
     ]
 
@@ -1029,6 +1324,57 @@ def _banner(fig, header, title=None):
     if title:
         fig.suptitle(title, fontsize=13, y=0.995)
     fig.text(.5, .955, header, fontsize=9, ha="center")
+
+
+
+_TAG_COLOR = {"A": "teal", "Y": "seagreen", "B": "seagreen", "F": "crimson", "b": "gray", "P": "black", "D": "black", "T": "gray", "R": "red"}
+
+
+def _mark_features(ax, res, with_labels=True):
+    """Thin vertical lines + a letter at the top of the axis for each detected light-curve feature.
+       A ablation onset | Y first yield | B first breakup | F flare | b small bump | P peak | D 1/e decay | T low-confidence tail | R retirement artifact"""
+    p = res.params
+    for f_ in res.features:
+        tag = f_["tag"]
+        if not tag:
+            continue
+        x = f_["t"] - p.tstart
+        ax.axvline(x, color=_TAG_COLOR.get(tag, "gray"), lw=0.6 if tag == "b" else 0.9, ls=":" if tag in ("b", "R", "T") else "--", alpha=.7)
+        if with_labels and tag != "b":
+            ax.text(x, 0.975, tag, transform=ax.get_xaxis_transform(), ha="center", va="top", fontsize=8.5,
+                    color=_TAG_COLOR.get(tag, "gray"), weight="bold")
+
+
+def plot_feature_guide(res, sat_W=None, title=None):
+    """One page: the log light curve annotated with every detected feature, and a table saying what each one is."""
+    import matplotlib.pyplot as plt
+    p = res.params
+    t = res.t - p.tstart
+    ymin, ymax, tlo, thi = _time_log_window(res)
+    fig = plt.figure(figsize=(14, 11))
+    ax = fig.add_axes([0.07, 0.56, 0.90, 0.36])
+    ax.semilogy(t, np.maximum(res.L_si, 1e-30), color=C_SI, label="Si band total")
+    if res.L_si_dust is not None:
+        ax.semilogy(t, np.maximum(res.L_si_dust, 1e-30), color=C_BRK, lw=0.9, alpha=.8, label="of which dust groups")
+    if sat_W:
+        ax.axhline(sat_W, color=C_SAT, ls=":", label=f"sensor saturation {sat_W:.1e} W")
+    ax.set_ylim(ymin, ymax); ax.set_xlim(tlo, thi)
+    _mark_features(ax, res)
+    ax.set_xlabel("time since start (s)"); ax.set_ylabel("Si-band power (W)"); ax.grid(True, alpha=.3, which="both"); ax.legend(loc="lower right", fontsize=9)
+    ax.set_title("Light-curve feature guide:  A ablation onset | Y first yield | B first breakup | F flare | b bump | P peak | D 1/e decay | T low-confidence tail | R retirement artifact", fontsize=9)
+    lines = ["id tag kind                    t(s)  alt(km)   L_si(W)    flag"]
+    for f_ in res.features:
+        if f_["kind"] == "bump" and sum(1 for g in res.features if g["kind"] == "bump" and g["id"] <= f_["id"]) > 5:
+            continue
+        lines.append(f"{f_['id']:>2d}  {f_['tag'] or '-':<2s} {f_['kind']:<22s} {f_['t']-p.tstart:6.3f} {f_['alt_km']:7.2f} {f_['L_si']:10.2e}   {f_['flag']}")
+        for ln in textwrap.wrap(f_["note"], width=135)[:3]:
+            lines.append("      " + ln)
+    nb_ = sum(1 for g in res.features if g["kind"] == "bump")
+    if nb_ > 5:
+        lines.append(f"   ... {nb_-5} more bumps listed in light_curve_features.dat")
+    fig.text(0.05, 0.50, "\n".join(lines[:44]), fontsize=7.6, va="top", family="monospace")
+    _banner(fig, make_header(p), title or "Light-curve feature guide")
+    return fig
 
 
 def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
@@ -1107,14 +1453,14 @@ def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
     a.text(0.0, 1.0, "(f) metrics" + ("  (model | published | status)" if has_pub else "  (model)"), fontsize=11, va="top", weight="bold", transform=a.transAxes)
     y = 0.93
     for name, mod, pub, ok in rows:
-        a.text(0.0, y, name, fontsize=8.8, va="top", family="monospace", transform=a.transAxes)
-        a.text(0.46, y, mod, fontsize=8.8, va="top", family="monospace", transform=a.transAxes)
+        a.text(0.0, y, name, fontsize=8.5, va="top", family="monospace", transform=a.transAxes)
+        a.text(0.46, y, mod, fontsize=8.5, va="top", family="monospace", transform=a.transAxes)
         if pub:
-            a.text(0.70, y, pub, fontsize=8.8, va="top", family="monospace", transform=a.transAxes)
+            a.text(0.70, y, pub, fontsize=8.5, va="top", family="monospace", transform=a.transAxes)
         if ok is not None:
-            a.text(0.97, y, "ok" if ok else "MISS", fontsize=8.8, va="top", family="monospace", ha="right",
+            a.text(0.97, y, "ok" if ok else "MISS", fontsize=8.5, va="top", family="monospace", ha="right",
                    color=("green" if ok else "red"), weight="bold", transform=a.transAxes)
-        y -= 0.062
+        y -= 0.055
     _banner(fig, make_header(p), title or "Bolide event summary")
     return fig
 
@@ -1131,6 +1477,8 @@ def plot_outputs(outdir, res: BolumResult, ref=None, rows=None, sat_W=None, titl
     t = res.t - p.tstart
     pdf = PdfPages(os.path.join(outdir, "bolide_plots.pdf"))
     fig = plot_event_summary(res, ref=ref, rows=rows, sat_W=sat_W, title=title)
+    pdf.savefig(fig); plt.close(fig)
+    fig = plot_feature_guide(res, sat_W=sat_W, title=title)
     pdf.savefig(fig); plt.close(fig)
 
     def page(title_):
@@ -1223,7 +1571,7 @@ def main(argv=None):
               f"E_rad(bol) {s['E_rad_bol_kt']:.4f} kt | peak L_Si {s['peak_L_si_W']:.3e} W at {s['alt_peak_L_km']:.1f} km | closure {s['energy_closure']:.1e}")
     else:
         print(format_report(res))
-        files = ["init_params.dat", "bolide_out.dat", "power_vs_time.dat", "power_vs_alt.dat", "dEdh.dat", "events.dat", "summary.dat", "run_report.txt"]
+        files = ["init_params.dat", "bolide_out.dat", "power_vs_time.dat", "power_vs_alt.dat", "dEdh.dat", "events.dat", "light_curve_features.dat", "summary.dat", "run_report.txt"]
         if not a.no_plots:
             files.append("bolide_plots.pdf")
         print(f" outputs written to {outdir}/ : " + ", ".join(files))

@@ -346,7 +346,7 @@ pdf.savefig(fig); fig.savefig(os.path.join(OUT, "diag_sweeps.png"), dpi=80); plt
 
 fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
 h = np.linspace(0, 110, 300)
-ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.3")
+ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.3.1")
 ax[0].semilogy(list(std) + [90, 100, 110], list(std.values()) + [3.416e-6, 5.604e-7, 9.708e-8], "ro", label="US Std 1976")
 ax[0].set_xlabel("altitude (km)"); ax[0].set_ylabel("density (kg/m^3)"); ax[0].set_title("Atmosphere"); ax[0].legend(); ax[0].grid(True, alpha=.3)
 v = np.linspace(0.5e3, 40e3, 300)

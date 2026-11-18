@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_block_v2.py  (version 2.3)  --  reduced-order bolide entry / fragmentation / luminosity model
+bolum_block_v2.py  (version 2.3.1)  --  reduced-order bolide entry / fragmentation / luminosity model
 
+VERSION 2.3.1: the light-curve feature letters now appear only on the feature-guide page (page 2 of bolide_plots.pdf), not on the
+standard summary page.  Nothing else changed.
 VERSION 2.3 ADDS LIGHT-CURVE FEATURE ANALYSIS (when and why the light curve changes character).  THE PHYSICS AND ALL
 PREVIOUS NUMBERS ARE IDENTICAL TO 2.2 (verified bit-for-bit); new output only.
 VERSION 2.2 WAS A STRUCTURAL REFACTOR OF 2.1: THE PHYSICS AND THE NUMBERS ARE IDENTICAL.
@@ -39,6 +41,18 @@ ENERGY BOOK-KEEPING (why the ledger closes exactly)
 
 PROVENANCE KEY:  [lit] taken from the literature   [adapt] literature form, adapted   [cal] value calibrated here
                  [new] construct introduced here (no direct published equivalent)
+
+GLOSSARY: YIELD vs BREAKUP vs FLARE  (three different kinds of thing)
+  yield     A MODEL EVENT for one group.  The group's loading rho*v^2 has reached its strength S.  From then on it is
+            squeezed and spreads sideways (pancake), so its area, drag and heating grow.  Nothing is split yet; mass and
+            number of groups are unchanged.  Logged once per group as kind='yield' in events.dat.
+  breakup   A MODEL EVENT for one group (logged as kind='split').  A yielding group has spread until its linear size grew
+            by f_split; it is replaced by n children (stronger, by Weibull scaling) plus a dust group.  This is when the
+            number of groups increases.  Order for any one group:  yield  ->  (spreading)  ->  breakup.
+  flare     A LIGHT-CURVE FEATURE you would see in the data, found by analyze_light_curve(): a rise in L steeper than the
+            air-density tracking rate.  It is an effect, not a cause.  A flare can come from a breakup (dust release),
+            from pancake growth after a yield with no breakup yet, or from several of these overlapping; and a breakup of a
+            small group may not produce a visible flare at all.  The feature notes list which events lie within the flare.
 
 USAGE
   python3 bolum_block_v2.py EVENT [--base DIR] [--no-plots] [--quiet] [--sat-W WATTS]
@@ -96,7 +110,7 @@ REFERENCES
   [T1]  Standard textbook physics: Planck's law (band fraction); Rayleigh pitot / Newtonian hypersonic stagnation
         pressure (p_stag = 0.92 rho v^2 for gamma = 1.4, -> rho v^2 for strong shocks).
 """
-__version__ = "2.3"
+__version__ = "2.3.1"
 
 import os
 import sys
@@ -1390,8 +1404,7 @@ def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
     if "peak_L_W" in ref:
         a.axhline(ref["peak_L_W"], color=C_PUB, ls="--", lw=1, label="published peak (Si band)")
     a.set_ylim(ymin, ymax); a.set_xlim(tlo, thi)
-    _mark_features(a, res)
-    a.set_xlabel("time since start (s)"); a.set_ylabel("power (W)"); a.set_title("(a) light curve  (letters: see feature guide)"); a.legend(fontsize=8, loc="lower right"); a.grid(True, alpha=.3, which="both")
+    a.set_xlabel("time since start (s)"); a.set_ylabel("power (W)"); a.set_title("(a) light curve"); a.legend(fontsize=8, loc="lower right"); a.grid(True, alpha=.3, which="both")
     # (b) L vs altitude
     a = ax[0, 1]
     a.semilogx(np.maximum(res.L_si, 1e-30), alt_km, color=C_SI, label="Si band")

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_block_v2.py  (version 2.3.1)  --  reduced-order bolide entry / fragmentation / luminosity model
+bolum_block_v2.py  (version 2.3.2)  --  reduced-order bolide entry / fragmentation / luminosity model
 
+VERSION 2.3.2: plots only.  Altitude-based panels now draw the low-confidence tail (L < 1e-3 of peak, after the peak) as a grey dotted
+line, because aggregate quantities there (energy-weighted altitude, mass-weighted speed, max loading) are computed over a few
+surviving groups at different altitudes and make unphysical hooks.  Panel (d) also shows mass retired to dark flight, so the
+drop in 'mass in flight' is not mistaken for ablation.  Flare notes now state the dust share of the LIGHT as well as of the rise.
 VERSION 2.3.1: the light-curve feature letters now appear only on the feature-guide page (page 2 of bolide_plots.pdf), not on the
 standard summary page.  Nothing else changed.
 VERSION 2.3 ADDS LIGHT-CURVE FEATURE ANALYSIS (when and why the light curve changes character).  THE PHYSICS AND ALL
@@ -110,7 +114,7 @@ REFERENCES
   [T1]  Standard textbook physics: Planck's law (band fraction); Rayleigh pitot / Newtonian hypersonic stagnation
         pressure (p_stag = 0.92 rho v^2 for gamma = 1.4, -> rho v^2 for strong shocks).
 """
-__version__ = "2.3.1"
+__version__ = "2.3.2"
 
 import os
 import sys
@@ -1034,16 +1038,20 @@ def analyze_light_curve(res, k_flare=3.0, min_rise=1.25, bump_min=0.04):
             ta, tb = float(grid[i0]), float(grid[j0])
             La, Lb = float(np.interp(ta, t, L)), float(np.interp(tb, t, L))
             near = ev_near(ta, tb, 0.05)
-            dust_share = float("nan")
+            dust_share = dust_end = float("nan")
             if res.L_si_dust is not None and Lb > La:
                 dust_share = (float(np.interp(tb, t, res.L_si_dust)) - float(np.interp(ta, t, res.L_si_dust))) / (Lb - La)
+                dust_share = min(max(dust_share, 0.0), 1.0)        # solid-group light can fall while dust rises; clip to 0-100 %
+                dust_end = float(np.interp(tb, t, res.L_si_dust)) / Lb
             nsplit = sum(1 for e in near if e["kind"] == "split")
             if near:
                 what = ("; ".join(f"{e['kind']} gen {e['gen']} at {e['alt']/1e3:.1f} km ({e['mass']/s['m0']*100:.0f}% of m0)" for e in near[:3])
                         + (f" +{len(near)-3} more" if len(near) > 3 else ""))
             else:
                 what = "no breakup within 0.05 s (growth of existing pancakes)"
-            dtxt = f" Dust groups supply {100*dust_share:.0f}% of the rise." if np.isfinite(dust_share) else ""
+            dtxt = (f" Dust groups supply {100*dust_share:.0f}% of the rise and {100*dust_end:.0f}% of the light at the end of the flare"
+                    f"{' (the model releases dust all at once, so a dust-dominated first flare is by construction)' if dust_share > 0.9 else ''}."
+                    if np.isfinite(dust_share) else "")
             flares.append((ta, tb))
             add("flare", "F", 0.5 * (ta + tb), "stylized",
                 f"Light rises x{Lb/max(La,1e-30):.1f} in {tb-ta:.2f} s (steeper than {k_flare:g}x the air-density tracking rate). Associated with: {what}.{dtxt} "
@@ -1377,6 +1385,34 @@ def plot_feature_guide(res, sat_W=None, title=None):
     return fig
 
 
+
+def _tail_index(res):
+    """Index where the light has fallen below 1e-3 of its peak (after the peak); len-1 if it never does.
+    Beyond this point the aggregate altitude/speed/loading series are built from a handful of surviving groups."""
+    L = res.L_si
+    ipk = int(np.argmax(L))
+    idx = np.flatnonzero(L[ipk:] < 1e-3 * L.max())
+    return ipk + int(idx[0]) if len(idx) else len(L) - 1
+
+
+def _plot_split(ax, x, y, it, color, label=None, logx=False, tail_label=False, **kw):
+    """Plot y(x) solid up to sample `it` and as a light grey dotted line afterwards (low-confidence tail)."""
+    f = ax.semilogx if logx else ax.plot
+    f(x[:it + 1], y[:it + 1], color=color, label=label, **kw)
+    if it < len(x) - 1:
+        f(x[it:], y[it:], color="0.65", ls=":", lw=1.0, label=("low-confidence tail (L < 1e-3 peak)" if tail_label else None))
+
+
+def _retired_mass_series(res):
+    """Cumulative mass (kg) retired to dark flight / ground, sampled at the light-curve times."""
+    ret = sorted(res.summary.get("retired", []), key=lambda r: r["t"])
+    if not ret:
+        return np.zeros_like(res.t)
+    tr = np.array([r["t"] for r in ret])
+    cum = np.concatenate([[0.0], np.cumsum([r["mass"] for r in ret])])
+    return cum[np.searchsorted(tr, res.t, side="right")]
+
+
 def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
     """Standardized 2x3 per-event figure (identical layout for every event).
 
@@ -1407,8 +1443,9 @@ def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
     a.set_xlabel("time since start (s)"); a.set_ylabel("power (W)"); a.set_title("(a) light curve"); a.legend(fontsize=8, loc="lower right"); a.grid(True, alpha=.3, which="both")
     # (b) L vs altitude
     a = ax[0, 1]
-    a.semilogx(np.maximum(res.L_si, 1e-30), alt_km, color=C_SI, label="Si band")
-    a.semilogx(np.maximum(res.L_bol, 1e-30), alt_km, color=C_BOL, alpha=.75, label="bolometric")
+    it = _tail_index(res)
+    _plot_split(a, np.maximum(res.L_si, 1e-30), alt_km, it, C_SI, "Si band", logx=True, tail_label=True)
+    _plot_split(a, np.maximum(res.L_bol, 1e-30), alt_km, it, C_BOL, "bolometric", logx=True, alpha=.75)
     if "peak_L_W" in ref and "peak_L_alt_km" in ref:
         a.plot([ref["peak_L_W"]], [ref["peak_L_alt_km"]], "*", color=C_PUB, ms=15, label="published peak")
     for h in ref.get("flares_km", []):
@@ -1430,13 +1467,15 @@ def plot_event_summary(res, ref=None, rows=None, sat_W=None, title=None):
     a.set_ylim(lo, hi); a.set_xlabel("dE/dh (kt TNT / km)"); a.set_ylabel("altitude (km)"); a.set_title("(c) energy deposition"); a.legend(fontsize=8); a.grid(True, alpha=.3)
     # (d) speed and mass
     a = ax[1, 0]
-    a.plot(res.v / p.velocity, alt_km, color="firebrick", label="speed / v0 (mass-weighted)")
-    a.plot(res.mass / s["m0"], alt_km, color="k", label="mass in flight / m0")
+    ret_m = _retired_mass_series(res) / s["m0"]
+    _plot_split(a, res.v / p.velocity, alt_km, it, "firebrick", "speed / v0 (mass-weighted)", tail_label=True)
+    _plot_split(a, res.mass / s["m0"], alt_km, it, "k", "mass in luminous flight / m0")
+    _plot_split(a, ret_m, alt_km, it, "tab:green", "mass retired to dark flight / m0", ls="--")
     a.set_xlim(0, 1.05); a.set_ylim(lo, hi); a.set_xlabel("fraction of initial value"); a.set_ylabel("altitude (km)")
     a.set_title("(d) speed and mass"); a.legend(fontsize=8); a.grid(True, alpha=.3)
     # (e) loading
     a = ax[1, 1]
-    a.semilogx(res.q_max / 1e6, alt_km, color="slateblue", label="max loading, rho v^2")
+    _plot_split(a, res.q_max / 1e6, alt_km, it, "slateblue", "max loading, rho v^2", logx=True, tail_label=True)
     sp = [e for e in res.events if e["kind"] == "split"]
     if sp:
         a.scatter([e["q"] / 1e6 for e in sp], [e["alt"] / 1e3 for e in sp], s=[12 + 70 * (e["mass"] / s["m0"]) ** 0.4 for e in sp],
@@ -1517,8 +1556,9 @@ def plot_outputs(outdir, res: BolumResult, ref=None, rows=None, sat_W=None, titl
     save(fig)
     lo, hi = _alt_window(res)
     fig = page("Power vs altitude")
-    plt.plot(res.L_si, res.alt / 1e3, color=C_SI, label="Si band")
-    plt.plot(res.L_bol, res.alt / 1e3, color=C_BOL, alpha=.75, label="bolometric")
+    it = _tail_index(res)
+    _plot_split(plt.gca(), res.L_si, res.alt / 1e3, it, C_SI, "Si band", tail_label=True)
+    _plot_split(plt.gca(), res.L_bol, res.alt / 1e3, it, C_BOL, "bolometric", alpha=.75)
     plt.xscale("log"); plt.xlim(max(1e-8 * res.L_si.max(), 1e-3), 3 * res.L_bol.max()); plt.ylim(lo, hi)
     plt.xlabel("Luminosity (W)"); plt.ylabel("Altitude (km)"); plt.legend()
     save(fig)
@@ -1533,9 +1573,10 @@ def plot_outputs(outdir, res: BolumResult, ref=None, rows=None, sat_W=None, titl
     ax2 = ax.twinx(); ax2.plot(t, res.n_groups, color="red", alpha=.7); ax2.set_ylabel("Fragment groups", color="red")
     save(fig)
     fig = page("Loading rho v^2 and speed vs altitude")
-    plt.plot(res.alt / 1e3, res.q_max / 1e6, color="slateblue"); plt.yscale("log"); plt.xlim(hi, lo)
+    _plot_split(plt.gca(), res.alt / 1e3, res.q_max / 1e6, it, "slateblue"); plt.yscale("log"); plt.xlim(hi, lo)
     plt.xlabel("Altitude (km)"); plt.ylabel("max loading (MPa)")
-    ax2 = plt.gca().twinx(); ax2.plot(res.alt / 1e3, res.v / 1e3, color="firebrick", alpha=.8); ax2.set_ylabel("speed (km/s)", color="firebrick")
+    ax2 = plt.gca().twinx(); _plot_split(ax2, res.alt / 1e3, res.v / 1e3, it, "firebrick", alpha=.8); ax2.set_ylabel("speed (km/s)", color="firebrick")
+    plt.gca().set_title("(grey dotted: low-confidence tail, L < 1e-3 of peak)", fontsize=8)
     save(fig)
     fig = page("Fragmentation history (marker size ~ parent mass)")
     sp = [e for e in res.events if e["kind"] == "split"]

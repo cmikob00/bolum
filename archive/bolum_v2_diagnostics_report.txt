@@ -68,6 +68,6 @@ PASS  roll-off and tail features come after the peak:
 PASS  intact body: no yield/flare features, still gets onset/peak/roll-off: ablation_onset, bump, drag_overtakes_ablation, first_light, peak, rolloff, tail
 PASS  drag+ablation channels sum to the deposited power: P_drag + P_abl = P_dep
 PASS  kinetic-energy ledger closure on every run: max |closure| = 3.3e-14 of KE0
-PASS  run time well under 1 minute: mean 0.43 s, max 1.44 s over 47 runs
+PASS  run time well under 1 minute: mean 0.61 s, max 2.13 s over 47 runs
 
 70/71 checks passed

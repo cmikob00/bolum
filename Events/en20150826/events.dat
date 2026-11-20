@@ -1,0 +1,3 @@
+# kind  t_s  alt_km  loading_MPa  mass_kg  strength_MPa  generation
+yield 2.7630 68.149 0.0400 6.4703e+00 0.0400 0
+split 2.8081 67.631 0.0429 6.4632e+00 0.0400 0

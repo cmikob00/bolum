@@ -1,0 +1,14 @@
+Bering Sea bolide 2018 Dec 18 (USG energy, 173 kt)  -- bolum v2.3 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 9.17      # m   (mass 1.41e+06 kg from 173 kt at 32 km/s, density 3500 kg/m^3 as assumed in the paper)
+velocity       = 32000    # m/s (USG sensors; may be unreliable - the paper also tests 27 km/s)
+theta_deg      = 76.0     # deg to horizontal (dust-trail radiant, zenith distance 14 deg; USG radiant is 21.4 deg -> 68.6 deg)
+init_strength  = 3.0e7    # Pa  CHOSEN, not published: loading rho*v^2 is ~30-40 MPa at 25-27 km, where the speed must still be ~32 km/s
+density        = 3500     # kg/m^3
+
+# ---- sources ----
+# Borovicka, Setvak, Roesli & Kerkmann (2020), Astron. Astrophys. (arXiv:2010.13597): USG sensors give peak brightness at 25.6 km,
+#   32.0 km/s, total radiated energy 1.3e14 J, impact energy 173 kt (from the Brown et al. 2002 relation); dust trail 23-34 km, densest ~25 km.
+#   Radiant from the dust trail: azimuth 130 deg, zenith distance 14 deg (range 7-21 deg).  Infrasound gives only 50 kt (Pilger et al. 2020, as cited there).
+# Brown et al. (2002), Nature 420, 294 (energy relation).
+# Radiated 1.3e14 J / 173 kt = 18% bolometric, consistent with the rising radiated fraction of large events.

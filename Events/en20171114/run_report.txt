@@ -1,0 +1,83 @@
+====================================================================================================
+ bolum v2.4.0 run report
+====================================================================================================
+ INPUT
+   body            d = 0.395 m   m0 = 1.0972e+02 kg   rho = 3400 kg/m3
+   entry           v = 19.770 km/s   theta = 15.70 deg   start alt = 100 km
+   KE0             2.1441e+10 J = 0.0051 kt TNT
+   strength        S0 = 0.0900 MPa  (loading = rho*v^2, stagnation pressure); Weibull alpha = 0.4
+   ablation        Lambda = 0.05  Q = 5.00e+06 J/kg  -> sigma = Lambda/(2Q) = 0.0050 s^2/km^2
+   fragmentation   4 children/breakup, dust 20% (r = 2.0 cm), spread c = 0.5, f_split = 2.0, f_max = 8.0
+                   smallest allowed child = min(1 kg, 0.001 x m0) = 0.11 kg
+   sensor          band 0.4-1.1 um at T_rad = 6000 K -> f_si = 0.6429   (L_bol = L_si / f_si);  tau basis = bolometric
+   luminosity      eta = (1-w)*tau(v,m) + w*0.20*f_si,  w = r/(r + 6 m);  t_cool = 0 s
+ FRAGMENTATION
+   first yield     alt 62.30 km  at loading 0.090 MPa  (t = 7.284 s)
+   breakups        1 (refused: 0);  max simultaneous groups 5
+   max loading     0.88 MPa at 38.0 km;   max deceleration of solid groups 309.5 g
+   first events:      kind    t(s)   alt(km)  loading(MPa)    mass(kg)  strength(MPa)  gen
+                      yield   7.284     62.30        0.090   1.084e+02         0.090    0
+                      split   7.362     61.91        0.095   1.082e+02         0.090    0
+ ENERGY
+   deposited       2.1427e+10 J = 0.005 kt  (99.93% of KE0; gravity work adds a little)
+   dE/dh           peak 0.0 kt/km at 44.2 km;  half-peak range 36.8-57.8 km;  half of the energy deposited above 46.8 km
+   ledger closure  (KE0 + W_grav - E_dep - KE_left)/KE0 = 4.77e-15
+ LIGHT
+   first light     L_si > 1e-6 of peak at 100.0 km (t = 0.00 s);  luminous end (L < 1% of peak) at 33.1 km
+   peak            L_si = 1.631e+08 W  (1.298e+07 W/sr)   L_bol = 2.538e+08 W
+                   at t = 10.29 s, ~48.1 km, mass-weighted speed 17.8 km/s
+   radiated        Si band 7.544e+08 J;  bolometric 1.173e+09 J = 0.0003 kt
+   efficiency      bolometric 5.48% / Si-band 3.52% of deposited energy
+   Brown+2002 check  E_total = 8.2508 E_rad^0.885 -> 0.006 kt  (model KE0 = 0.005 kt, ratio 1.16; population scatter ~x2)
+ LIGHT-CURVE FEATURES   (heuristic classifier; flags: physical = real process | stylized = real process but its shape/number is set by model rules |
+                         artifact = bookkeeping effect | low-confidence = controlled by artifacts)
+   id tag  kind                       t(s)  alt(km)     L_si(W)  flag
+    1  -   first_light              0.003   100.00   1.208e+04  info
+          L_si first exceeds 1e-6 of its peak. This is just a visibility threshold; the real value
+          depends on your sensor floor and on where the simulation starts (zstart).
+    2  A   ablation_onset           2.718    85.65   1.592e+05  stylized
+          Net heating flux first exceeds radiative loss at T_ablate = 2300 K, so ablation switches on
+          (a kink in the slope). Real onset is gradual over a few km. BELOW this point the model's
+          light is drag work only (no ablated material): treat light above ~86 km as low-confidence.
+          Loosely like the end of Phase 1 / start of Phase 2 in [R22], but the model has no spin,
+          volatile (Na/K) emission or melt physics.
+    3  Y   first_yield              7.284    62.31   1.409e+07  physical
+          Loading rho v^2 reaches S0 = 0.09 MPa. The body starts to flatten (pancake): area, drag and
+          heating all grow, so the light rises faster. Analogue of the onset of fragmentation (Phase 5
+          / H_f in [R22]).
+    4  F   flare                    7.331    62.08   3.706e+07  stylized
+          Light rises x5.6 in 0.17 s (steeper than 3x the air-density tracking rate). Associated with:
+          yield gen 0 at 62.3 km (99% of m0); split gen 0 at 61.9 km (99% of m0). Dust groups supply
+          46% of the rise and 38% of the light at the end of the flare. A real fragmentation flare
+          (Phase 5 in [R22]); its sharpness and timing here come from the model's deterministic
+          cascade.
+    5  B   first_breakup            7.362    61.92   6.194e+07  stylized
+          Spread factor reached f_split = 2: the body breaks into 4 children plus 20 % of its mass as
+          dust. The dust has a large area-to-mass ratio, decelerates and ablates within a fraction of
+          a second, which makes a sharp flare. The instantaneous release is a model simplification.
+          Light grew x4.4 between first yield and this breakup (pancake spreading).
+    6  P   peak                    10.287    48.09   1.631e+08  physical
+          Maximum light. It sits ~+3.8 km from the peak of energy deposition (44.2 km) because the
+          luminous efficiency tau(v) falls as the fragments slow (mass-weighted speed here 17.8 km/s).
+    7  -   drag_overtakes_ablation  12.267    40.16   8.945e+07  stylized
+          Drag work now exceeds the kinetic energy carried off by ablated mass. The ratio
+          ablation/drag is about Lambda v^2/(2 Q Cd), so this happens when the speed falls below ~14
+          km/s (from the model's heating law).
+    8  D   rolloff                 12.732    38.62   5.994e+07  physical
+          Light has fallen to 1/e of the peak 2.45 s after it. Cause: the kinetic energy is being used
+          up (speed 65% of v0, 32% of the mass still in flight) and tau(v) drops with speed. Analogue
+          of Phase 7 (decline until dark flight) in [R22].
+    9  T   tail                    16.473    31.55   1.630e+05  low-confidence
+          Below 1e-3 of the peak the light is controlled by groups being retired when they slow below
+          v_dark = 3.0 km/s and by the tau taper (2-4 km/s). Do not interpret structure below this
+          level.
+   timing          10/50/90 % of the radiated energy by t = 7.97 / 10.16 / 12.34 s  (~59 / 49 / 40 km)
+   shape           time above half-peak 4.87 s;  rise (10% -> peak) 2.99 s;  decay e-fold 2.45 s
+   budget          radiated before first yield 2.5%;  from dust groups 19.7%;  ablation supplies 56% of the deposited energy, drag the rest
+   counts          1 flares, 0 small bumps
+ SURVIVORS
+   solid 12.03% and dust 3.05% of m0 left luminous flight (< 3.0 km/s) or reached the ground;  ground-impact KE 0.00e+00 J
+ RUN
+   6014 steps, simulated 18.0 s, wall time 2.48 s
+   no warnings
+====================================================================================================

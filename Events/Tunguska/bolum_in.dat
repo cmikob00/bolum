@@ -1,0 +1,7 @@
+Tunguska 1908 (Chyba et al. 1993 Nature; consensus modern values)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 55.0       # m   (50–60 m range common for ~10–15 Mt stony solution)
+velocity       = 15000.0    # m/s  (12–20 km/s range; 15 km/s is a common modern choice)
+theta_deg      = 35.0       # deg to horizontal (20–45° range; 30–40° often preferred)
+init_strength  = 5.0e5      # Pa  (weak stony; airburst ~5–10 km)
+density        = 3000.0     # kg/m3  (stony asteroid; lower if more porous/carbonaceous)

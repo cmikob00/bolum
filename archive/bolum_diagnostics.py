@@ -320,13 +320,17 @@ pdf.savefig(fig); fig.savefig(os.path.join(OUT, "diag_guide_cleveland.png"), dpi
 fig, ax = plt.subplots(2, 2, figsize=(15, 10))
 fig.subplots_adjust(left=.07, right=.98, top=.91, bottom=.07, wspace=.25, hspace=.30)
 a = ax[0, 0]
-ek = np.logspace(-3.5, 3.2, 100)
-brown = ek / (8.2508 * ek ** 0.885)
-a.plot(ek, brown, "k-", label="Brown+2002 relation"); a.fill_between(ek, 0.5 * brown, 2 * brown, color="gray", alpha=.2, label="x2 band")
+# Brown et al. (2002): E_total = 8.2508 * E_rad^0.885 (kt).  Invert it to get the radiated fraction E_rad/E_total AS A FUNCTION OF TOTAL ENERGY
+# (earlier versions of this figure drew the curve against E_rad by mistake while the axis showed total energy).
+ek = np.logspace(-3.0, 3.3, 100)                    # total energy (kt)
+e_rad = (ek / 8.2508) ** (1.0 / 0.885)
+brown = e_rad / ek
+a.plot(ek, brown, "k-", label="Brown+2002 relation")
+a.fill_between(ek, 0.5 * brown, 2 * brown, color="gray", alpha=.2, label="x2 band = assumed factor-2 population scatter (not a published error bar)")
 for S0, mk in zip(strengths, "osd"):
     a.plot([sweep[(d, S0)]["E_dep_kt"] for d in diams], [sweep[(d, S0)]["eta_bol_overall"] for d in diams], mk + "-", label=f"model, S0 = {S0/1e6:.1f} MPa")
 a.plot([cb["E_dep_kt"], ct["E_dep_kt"]], [cb["eta_bol_overall"], ct["eta_bol_overall"]], "*", color="crimson", ms=13, label="Chelyabinsk, TC3 runs")
-a.set_xscale("log"); a.set_xlabel("deposited energy (kt)"); a.set_ylabel("bolometric radiated fraction"); a.set_title("(a) radiated fraction vs energy"); a.legend(fontsize=8); a.grid(True, alpha=.3)
+a.set_xscale("log"); a.set_xlabel("total (deposited) energy (kt)"); a.set_ylabel("bolometric radiated fraction"); a.set_title("(a) radiated fraction vs energy"); a.legend(fontsize=8); a.grid(True, alpha=.3)
 a = ax[0, 1]
 for S0 in strengths:
     a.plot(diams, [sweep[(d, S0)]["alt_peak_dEdh_km"] for d in diams], "o-", label=f"S0 = {S0/1e6:.1f} MPa")
@@ -346,7 +350,7 @@ pdf.savefig(fig); fig.savefig(os.path.join(OUT, "diag_sweeps.png"), dpi=80); plt
 
 fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
 h = np.linspace(0, 110, 300)
-ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.3.1")
+ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.3.2")
 ax[0].semilogy(list(std) + [90, 100, 110], list(std.values()) + [3.416e-6, 5.604e-7, 9.708e-8], "ro", label="US Std 1976")
 ax[0].set_xlabel("altitude (km)"); ax[0].set_ylabel("density (kg/m^3)"); ax[0].set_title("Atmosphere"); ax[0].legend(); ax[0].grid(True, alpha=.3)
 v = np.linspace(0.5e3, 40e3, 300)

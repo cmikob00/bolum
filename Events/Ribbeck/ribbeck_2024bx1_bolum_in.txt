@@ -1,0 +1,17 @@
+2024 BX1 / Ribbeck (aubrite fall, 2024 Jan 21)  -- bolum v2.3 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.442      # m   (140 kg at 3100 kg/m^3; paper gives 0.44 m)
+velocity       = 15200    # m/s (15.199 km/s)
+theta_deg      = 75.6     # deg to horizontal (average slope to the surface)
+init_strength  = 1.2e5    # Pa  first catastrophic fragmentation: 55 km, 0.12 MPa (Table 4)
+strength_secondary = 9.0e5    # Pa  second phase starts ~0.87 MPa at 38.5 km (Table 4)
+strength_tertiary  = 1.4e6    # Pa  further breakups 1.07-1.74 MPa
+strength_quaternary = 2.0e6   # Pa  up to ~2.2 MPa at 30.6 km
+density        = 3100     # kg/m^3 (typical aubrite)
+
+# ---- sources ----
+# Spurny, Borovicka, Shrbeny, Hankey & Neubert (2024), Astron. Astrophys. (arXiv:2403.00634), Tables 2-4, Sect. 4 and 7.
+# Published targets: begins 93.3 km, ends 21.3 km, 5.95 s luminous duration; peak -14.4 abs. mag in two near-equal flares at 35.2 and 33.9 km;
+#   last flare at 24.5 km; gradual dust loss from 66 km (0.03 MPa, not modelled here); first major breakup at 55 km (largest fragments < 5% of mass).
+# Peak whole-spectrum power implied by their Eq. 5, I = 1500 W x 10^(-0.4 M): about 8.6e8 W.
+# The paper lowered the luminous efficiency by ~20% because the iron-poor spectrum lacks bright Fe lines.

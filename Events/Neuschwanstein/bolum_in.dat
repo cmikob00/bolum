@@ -1,0 +1,7 @@
+Neuschwanstein 2002 (Spurný et al.; ReVelle et al. 2004)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.66       # m   (~300–500 kg range; ~0.33 m radius used in modeling)
+velocity       = 20950.0    # m/s
+theta_deg      = 49.0       # deg to horizontal
+init_strength  = 1.5e6      # Pa  (enstatite chondrite; relatively strong)
+density        = 3500.0     # kg/m3  (EL6)

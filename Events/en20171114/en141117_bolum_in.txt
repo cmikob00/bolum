@@ -1,0 +1,13 @@
+Fireball 2017 Nov 14 (shallow, 15 s, meteorite not recovered)  -- bolum v2.3 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.395      # m   (from entry mass 110 kg at 3400 kg/m^3; mass from the published fragmentation model)
+velocity       = 19770    # m/s
+theta_deg      = 15.7       # deg to horizontal (= 90 - zenith distance 74.3 deg)
+init_strength  = 9e+04      # Pa  first-phase fragmentation, loading = rho*v^2
+strength_secondary = 5.0e6   # Pa  fragment survived to 2.2 MPa with no 2nd-phase breakup; set above that (paper, Sect. 4.2)
+density        = 3400      # kg/m^3
+
+# ---- sources ----
+# Borovicka, Spurny & Shrbeny (2020), Astron. J. 160, 42 (arXiv:2006.07080), Tables 1-3 and Sect. 4
+# Published targets: slope only 15 deg, fireball lasts ~15 s, begins 94.71 km, ends 26.17 km, max abs. mag -12.8; last gross fragmentation at 0.09 MPa.
+# Best test of the shallow-entry geometry and the long, low-loading tail.

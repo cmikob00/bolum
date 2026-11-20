@@ -1,0 +1,7 @@
+Park Forest 2003 (Brown et al. 2004 Meteorit. Planet. Sci.)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 1.8        # m   (~11 t; L5)
+velocity       = 19500.0    # m/s
+theta_deg      = 61.0       # deg to horizontal (29° from vertical)
+init_strength  = 1.0e6      # Pa  (early frag <1 MPa; major events 2–5 MPa)
+density        = 3400.0     # kg/m3  (L5 ordinary chondrite)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_diagnostics.py (for bolum_block_v2.py v2.3) -- verification, convergence and validation suite
+bolum_diagnostics.py (for bolum_block_v2.py v2.4.0) -- verification, convergence and validation suite
 
   A. components        atmosphere vs US Std 1976, tau(v,m) behaviour, Si-band fraction, loading convention
   B. verification      engine vs an independent RK45 integration of the same single-body ODEs
@@ -9,7 +9,7 @@ bolum_diagnostics.py (for bolum_block_v2.py v2.3) -- verification, convergence a
   D. convergence       time step, group cap, children per breakup
   E. events            Chelyabinsk 2013, 2008 TC3, Kosice 2010 vs published values  (one STANDARDIZED figure per event)
   F. sweeps            0.5-25 m, three strengths, entry-angle and speed trends, radiated fraction vs Brown et al. (2002)
-  G. regression/CLI    v2.3 reproduces v2.0 numbers (after the strength-convention change); command-line smoke test
+  G. regression/CLI    v2.4 (old settings) reproduces v2.0 numbers (after the strength-convention change); command-line smoke test
   H. run time
   I. light-curve feature analysis (new in 2.3): ablation-onset altitude vs analytic, attribution, robustness
 
@@ -127,9 +127,13 @@ for tag, kw in {"2 m, 15 km/s, 30 deg": dict(diameter=2.0, velocity=15e3, theta_
 print("\n=== B2. small bolides recover the original Si-band efficiency ===")
 res = run("0.3 m intact", diameter=0.3, velocity=20e3, theta_deg=45., init_strength=1e9, density=3300.)
 dts = np.diff(np.concatenate([[0.0], res.t]))
+f_si_ = float(band_fraction(6000.)[0])
 E_tau = float(np.sum(tau_fit(res.v, np.maximum(res.mass, 1e-3)) * res.P_dep * dts))
-ratio = res.summary["E_rad_si_J"] / E_tau
-check("0.3 m: integrated L_Si / (tau_fit x deposited energy)", 0.93 < ratio < 1.12, f"ratio {ratio:.3f}")
+ratio = res.summary["E_rad_si_J"] / (E_tau * f_si_)          # default tau_basis is 'bolometric': Si band = f_si x tau x E_dep
+check("0.3 m: integrated L_Si / (f_si x tau_fit x deposited energy)  [tau is whole-spectrum]", 0.93 < ratio < 1.12, f"ratio {ratio:.3f}")
+res_si = run("0.3 m intact, tau_basis=si", diameter=0.3, velocity=20e3, theta_deg=45., init_strength=1e9, density=3300., tau_basis="si")
+check("tau_basis switch: Si-band output scales by f_si for a small body", abs(res.summary["E_rad_si_J"] / res_si.summary["E_rad_si_J"] / f_si_ - 1) < 0.05,
+      f"E_si(bolometric)/E_si(si) = {res.summary['E_rad_si_J']/res_si.summary['E_rad_si_J']:.3f}, f_si = {f_si_:.3f}")
 
 # =====================================================================  D. convergence
 print("\n=== D. convergence (Chelyabinsk-like) ===")
@@ -169,7 +173,11 @@ rowcheck(rows_ch, "half-peak range (km)", "Chelyabinsk: half-energy range", f"{l
 rowcheck(rows_ch, "peak dE/dh (kt/km)", "Chelyabinsk: peak dE/dh", f"{cb['peak_dEdh_kt_per_km']:.0f}", "~80", 0.6 < cb["peak_dEdh_kt_per_km"] / 80 < 1.4)
 rowcheck(rows_ch, "E_rad bol (J)", "Chelyabinsk: radiated energy", f"{cb['E_rad_bol_J']:.2e}", "3.75e14", abs(math.log(cb["E_rad_bol_J"] / 3.75e14)) < math.log(1.25))
 rowcheck(rows_ch, "peak I_Si (W/sr)", "Chelyabinsk: peak Si-band intensity", f"{cb['peak_I_si_W_sr']:.2e}", "2.7e13", abs(math.log(cb["peak_I_si_W_sr"] / 2.7e13)) < math.log(1.4))
-rowcheck(rows_ch, "alt of peak light (km)", "Chelyabinsk: altitude of peak light", f"{cb['alt_peak_L_km']:.1f}", "29.7", abs(cb["alt_peak_L_km"] - 29.7) < 2.5)
+rowcheck(rows_ch, "alt of peak light (km)", "Chelyabinsk: altitude of peak light", f"{cb['alt_peak_L_km']:.1f}", "29.7", abs(cb["alt_peak_L_km"] - 29.7) < 2.5,
+         f"{cb['alt_peak_L_km']:.1f} vs 29.7 km. NOTE: the model has two near-equal peaks (dust flare at the first breakup ~36 km and the main phase ~32 km); the larger one wins by ~1%")
+_a = base.alt / 1e3; _m = (_a > 26) & (_a < 34); _j = np.flatnonzero(_m)[np.argmax(base.L_si[_m])]
+check("Chelyabinsk: a light-curve peak within 2.5 km of 29.7 km with >= 90% of the maximum (informational)",
+      abs(_a[_j] - 29.7) < 2.5 and base.L_si[_j] >= 0.9 * base.L_si.max(), f"main-phase peak {_a[_j]:.1f} km at {base.L_si[_j]/base.L_si.max()*100:.0f}% of the maximum")
 rows_ch += [r for r in model_metric_rows(base) if r[0] in ("first yield alt (km)", "breakups", "luminous end alt (km)", "energy-ledger closure")]
 REF_CH = dict(peak_L_W=2.7e13 * 4 * PI, peak_L_alt_km=29.7, peak_dEdh=(29.5, 80.0), half_range_km=(27., 33.))
 EVENT_FIGS.append((base, REF_CH, rows_ch, "Chelyabinsk 2013  (calibration event)"))
@@ -245,9 +253,14 @@ for d in (2, 8, 20):
 # =====================================================================  G. regression and CLI smoke test
 print("\n=== G. regression vs v2.0 (strengths doubled for the convention change) and CLI smoke test ===")
 V20 = {"Chelyabinsk": (93.04, 2.749e14, cb), "TC3": (0.1393, 1.844e11, ct), "Kosice": (None, 2.831e10, ck)}
-for name, (er, pk, sm) in V20.items():
+_old = dict(tau_basis="si", m_min_frag_frac=1.0)             # v2.0-v2.3 behaviour
+_rr = {"Chelyabinsk": run_bolide(BolumParams(**CH, **_old)).summary,
+       "TC3": run_bolide(BolumParams(diameter=4.1, velocity=12.8e3, theta_deg=19.5, init_strength=0.3e6, density=2300., **_old)).summary,
+       "Kosice": run_bolide(BolumParams(diameter=1.25, velocity=15e3, theta_deg=60., init_strength=0.1e6, strength_secondary=1.0e6, density=3400., **_old)).summary}
+for name, (er, pk, _unused) in V20.items():
+    sm = _rr[name]
     ok = abs(sm["peak_L_si_W"] / pk - 1) < 0.005 and (er is None or abs(sm["E_rad_bol_kt"] / er - 1) < 0.005)
-    check(f"v2.3 reproduces v2.0: {name}", ok, f"peak L {sm['peak_L_si_W']:.3e} (v2.0 {pk:.3e})" + (f", E_rad {sm['E_rad_bol_kt']:.3f} kt (v2.0 {er})" if er else ""))
+    check(f"v2.4 (old settings) reproduces v2.0: {name}", ok, f"peak L {sm['peak_L_si_W']:.3e} (v2.0 {pk:.3e})" + (f", E_rad {sm['E_rad_bol_kt']:.3f} kt (v2.0 {er})" if er else ""))
 with tempfile.TemporaryDirectory() as td:
     d_ = os.path.join(td, "smoke")
     os.makedirs(d_)
@@ -292,6 +305,15 @@ ki = kinds(intact)
 check("intact body: no yield/flare features, still gets onset/peak/roll-off", ("first_yield" not in ki and "flare" not in ki and "ablation_onset" in ki and "peak" in ki),
       ", ".join(sorted(set(ki))))
 check("drag+ablation channels sum to the deposited power", np.allclose(CL.P_drag + CL.P_abl, CL.P_dep, rtol=1e-9), "P_drag + P_abl = P_dep")
+
+print("\n=== J. minimum fragment mass scales with body mass (new in 2.4) ===")
+tiny = dict(diameter=0.15, velocity=19.36e3, theta_deg=36.7, init_strength=4.0e4, strength_secondary=1.0e6, density=3400.)
+t_new = run("6.5 kg, scaled m_min", **tiny).summary
+t_old = run("6.5 kg, fixed 1 kg m_min", m_min_frag_frac=1.0, **tiny).summary
+check("6.5 kg body: scaled minimum lets the cascade complete (old fixed 1 kg refused breakups)", t_new["split_refused"] == 0 and t_old["split_refused"] > 0,
+      f"refused {t_old['split_refused']} -> {t_new['split_refused']}, groups {t_old['n_groups_max']} -> {t_new['n_groups_max']}")
+c_old = run("Chelyabinsk fixed m_min", m_min_frag_frac=1.0, **CH).summary
+check("bodies heavier than ~1000 kg are unaffected by the scaling (Chelyabinsk)", c_old["peak_L_si_W"] == base.summary["peak_L_si_W"] and c_old["E_rad_si_J"] == base.summary["E_rad_si_J"], "identical")
 
 # =====================================================================  C/H. ledger and run time
 print("\n=== C/H. conservation and run time (all %d runs) ===" % len(RUNS))
@@ -350,7 +372,7 @@ pdf.savefig(fig); fig.savefig(os.path.join(OUT, "diag_sweeps.png"), dpi=80); plt
 
 fig, ax = plt.subplots(1, 3, figsize=(17, 4.8))
 h = np.linspace(0, 110, 300)
-ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.3.2")
+ax[0].semilogy(h, ATM.rho(h * 1e3), label="bolum v2.4.0")
 ax[0].semilogy(list(std) + [90, 100, 110], list(std.values()) + [3.416e-6, 5.604e-7, 9.708e-8], "ro", label="US Std 1976")
 ax[0].set_xlabel("altitude (km)"); ax[0].set_ylabel("density (kg/m^3)"); ax[0].set_title("Atmosphere"); ax[0].legend(); ax[0].grid(True, alpha=.3)
 v = np.linspace(0.5e3, 40e3, 300)

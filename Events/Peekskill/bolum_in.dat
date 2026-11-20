@@ -1,0 +1,7 @@
+Peekskill 1992 (Brown et al.; Ceplecha et al.)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 1.0        # m   (~10 t order-of-magnitude)
+velocity       = 14700.0    # m/s
+theta_deg      = 20.0       # deg to horizontal (shallow; long luminous path)
+init_strength  = 1.0e6      # Pa  (ordinary chondrite; survived to low altitude)
+density        = 3400.0     # kg/m3  (H6)

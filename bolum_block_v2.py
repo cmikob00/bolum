@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bolum_block_v2.py  (version 2.3.2)  --  reduced-order bolide entry / fragmentation / luminosity model
+bolum_block_v2.py  (version 2.4.0)  --  reduced-order bolide entry / fragmentation / luminosity model
 
+VERSION 2.4.0: TWO DEFAULTS CHANGED, SO RESULTS CHANGE (physics equations unchanged).
+  1. tau_basis now defaults to 'bolometric'.  Borovicka, Spurny & Shrbeny (2020) [R2] state that their tau is for the whole spectral
+     range, so the Si-band efficiency of the thin (meteor-like) component is tau * f_si.  On seven independent fireballs the peak powers
+     then match the observed absolute magnitudes better (geometric-mean ratio 1.09 vs 1.59 for the old 'si' reading).
+  2. The smallest fragment allowed in a breakup is now min(m_min_frag, m_min_frag_frac * m0) instead of a fixed m_min_frag = 1 kg, so
+     bodies lighter than ~1000 kg can complete their cascade.  Bodies heavier than 1000 kg (Chelyabinsk, TC3, Kosice) are unaffected.
+  To reproduce version 2.3.x exactly:  tau_basis = si  and  m_min_frag_frac = 1.0.
+VERSION 2.3.3: input decks may contain whole-line '#' comments (references) containing '='; they are skipped. No other change.
 VERSION 2.3.2: plots only.  Altitude-based panels now draw the low-confidence tail (L < 1e-3 of peak, after the peak) as a grey dotted
 line, because aggregate quantities there (energy-weighted altitude, mass-weighted speed, max loading) are computed over a few
 surviving groups at different altitudes and make unphysical hooks.  Panel (d) also shows mass retired to dark flight, so the
@@ -114,7 +122,7 @@ REFERENCES
   [T1]  Standard textbook physics: Planck's law (band fraction); Rayleigh pitot / Newtonian hypersonic stagnation
         pressure (p_stag = 0.92 rho v^2 for gamma = 1.4, -> rho v^2 for strong shocks).
 """
-__version__ = "2.3.2"
+__version__ = "2.4.0"
 
 import os
 import sys
@@ -288,14 +296,15 @@ class BolumParams:
     f_split: float = 2.0             # split after the group's linear size grew by this factor [new]
     f_max: float = 8.0               # pancake limit (linear); R7 uses ~7 [adapt]
     max_groups: int = 128
-    m_min_frag: float = 1.0          # kg; groups below this do not split further
+    m_min_frag: float = 1.0          # kg; absolute floor: a breakup is refused if its smallest child would be lighter than this ...
+    m_min_frag_frac: float = 1.0e-3  # ... or lighter than this fraction of the initial mass, whichever is SMALLER (so light bodies can still split)
     dust_frac: float = 0.20          # mass fraction released as fine dust at each breakup [new; motivated by R2,R4,R15; cal]
     dust_radius: float = 2.0e-2      # m, characteristic dust particle radius [cal]
     strength_secondary: float = None
     strength_tertiary: float = None
     strength_quaternary: float = None
     # --- luminosity / sensor ---
-    tau_basis: str = "si"            # 'si': tau fit is the Si-band efficiency; 'bolometric': it is bolometric
+    tau_basis: str = "bolometric"    # 'bolometric': tau fit is the whole-spectrum efficiency [lit R2]; 'si': treat it as Si-band (pre-2.4 default)
     T_rad: float = 6000.0            # K, blackbody temperature for band conversion [lit R12 convention]
     sensor_lo_um: float = 0.4
     sensor_hi_um: float = 1.1
@@ -328,7 +337,7 @@ def rdinput(inputpath):
     with open(inputpath, "r") as fh:
         lines = fh.readlines()[2:]
     for line in lines:
-        if "=" not in line:
+        if "=" not in line or line.lstrip().startswith("#"):    # skip blank lines and whole-line comments
             continue
         key, rest = line.split("=", 1)
         val = rest.split("#")[0].strip()
@@ -568,8 +577,9 @@ def radiative_efficiency(p, f_si, basis_si, v, m, A):
     """Fraction eta of the deposited energy that is emitted as Si-band light, for each group.  [new blend; R2, R12, R13]
 
     Two limits are blended:
-      * THIN  (small, meteor-like fragments):  eta_thin = tau(v, m), the published empirical fit [lit R2].  If the fit is
-        interpreted as bolometric (tau_basis = 'bolometric') it is multiplied by f_si to give a Si-band value.
+      * THIN  (small, meteor-like fragments):  eta_thin = tau(v, m), the published empirical fit [lit R2].  The fit is a
+        WHOLE-SPECTRUM efficiency [R2], so with the default tau_basis = 'bolometric' it is multiplied by f_si to give the Si-band
+        value (tau_basis = 'si' uses it directly as a Si-band efficiency, the pre-2.4 behaviour).
       * THICK (large, radiation-dominated clouds): eta_thick = eta_thick_bol * f_si, a bolometric efficiency that does
         not depend on speed (but is tapered to zero between 4 and 8 km/s so light ends when the body slows).
     The blend weight is  w = r/(r + r_half), r = projected radius of the group, so big clouds are 'thick' and small
@@ -602,7 +612,7 @@ def child_mass_shares(p):
     return w / w.sum()
 
 
-def spawn_children(st, i, p, w_share, legacy_S, t_now, alt_now, q_now, events):
+def spawn_children(st, i, p, w_share, legacy_S, t_now, alt_now, q_now, events, m_min_eff):
     """Break group i into n children plus a dust group (progressive fragmentation).  [new; concept R4, R8, R16]
 
     * Mass is conserved:  dust_frac of the parent goes to the dust group; the rest is shared among the children by
@@ -614,13 +624,13 @@ def spawn_children(st, i, p, w_share, legacy_S, t_now, alt_now, q_now, events):
     * AREA continuity: the spread factor of each child is chosen so that the children's total projected area is about
       equal to the parent's, so the drag does not jump at the instant of breakup.
     * Returns False (and does nothing) if there are not enough free slots or the smallest child would be lighter than
-      p.m_min_frag; the caller then leaves the group as a pancake."""
+      m_min_eff = min(p.m_min_frag, p.m_min_frag_frac * m0); the caller then leaves the group as a pancake."""
     free = np.flatnonzero(~st.alive)
     n_child = int(p.n_fragments)
     need = n_child if p.dust_frac > 0 else n_child - 1
     mp, fp, Sp, gp = st.m[i], st.f[i], st.S[i], st.gen[i]     # parent mass, spread, strength, generation
     m_solid = mp * (1.0 - p.dust_frac)
-    if len(free) < need or m_solid * w_share[-1] < p.m_min_frag:
+    if len(free) < need or m_solid * w_share[-1] < m_min_eff:
         return False
     slots = [i] + list(free[: n_child - 1])                   # child 0 reuses the parent's slot
     xi_, zi_, vxi_, vzi_ = st.x[i], st.z[i], st.vx[i], st.vz[i]
@@ -648,7 +658,7 @@ def spawn_children(st, i, p, w_share, legacy_S, t_now, alt_now, q_now, events):
     return True
 
 
-def split_spread_groups(st, p, w_share, legacy_S, t, events):
+def split_spread_groups(st, p, w_share, legacy_S, t, events, m_min_eff):
     """Split every group that has spread far enough (f >= fb * f_split) while yielding.
 
     Returns the number of splits that were REFUSED (no free slots / fragments too small).  A refused group is
@@ -659,7 +669,7 @@ def split_spread_groups(st, p, w_share, legacy_S, t, events):
         altk = float(np.hypot(st.x[k], st.z[k]) - RE)
         vk = float(np.hypot(st.vx[k], st.vz[k]))
         qk = float(ATM.rho(altk)) * vk * vk
-        if not spawn_children(st, k, p, w_share, legacy_S, t, altk, qk, events):
+        if not spawn_children(st, k, p, w_share, legacy_S, t, altk, qk, events, m_min_eff):
             st.fb[k] = np.inf
             refused += 1
     return refused
@@ -835,7 +845,7 @@ def build_summary(p, st, rec: RunRecorder, T_, L_si, L_bol, ALT, V_, KE0, m0, f_
     if abs(closure) > 1e-6:
         warns.append(f"energy ledger closure {closure:.1e} exceeds 1e-6")
     if rec.split_refused:
-        warns.append(f"{rec.split_refused} breakup(s) refused (group cap max_groups={p.max_groups} or m_min_frag) - raise max_groups?")
+        warns.append(f"{rec.split_refused} breakup(s) refused (group cap max_groups={p.max_groups} or smallest child < {min(p.m_min_frag, p.m_min_frag_frac*m0):.3g} kg) - raise max_groups or lower m_min_frag_frac?")
     if summary["reached_tstop"]:
         warns.append(f"stopped at tstop={p.tstop:.0f} s with groups still in flight")
     if summary["E_dep_kt"] < 0.5 * summary["KE0_kt"]:
@@ -856,6 +866,7 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
     w_share = child_mass_shares(p)                                # how a breakup divides the mass among children
     q_loss = p.emissivity * SIGMA_SB * p.T_ablate ** 4            # radiative loss at the ablation temperature (W/m^2)
     m_dead = 1.0e-9 * m0                                          # below this mass a group counts as fully ablated
+    m_min_eff = min(p.m_min_frag, p.m_min_frag_frac * m0)         # smallest child a breakup may create (kg)
     f_si = float(band_fraction(p.T_rad, p.sensor_lo_um, p.sensor_hi_um)[0])   # Si-band fraction of the blackbody
     basis_si = p.tau_basis.lower() == "si"
     legacy_S = [p.strength_secondary, p.strength_tertiary, p.strength_quaternary]
@@ -898,7 +909,7 @@ def run_bolide(p: BolumParams, verbose=False) -> BolumResult:
         # 9. retire groups that burned up, hit the ground, or dropped below luminous speed
         retire_groups(st, ia, up, du, p, t, rec)
         # 10. split groups that have spread enough (progressive fragmentation + dust release)
-        rec.split_refused += split_spread_groups(st, p, w_share, legacy_S, t, rec.events)
+        rec.split_refused += split_spread_groups(st, p, w_share, legacy_S, t, rec.events, m_min_eff)
 
     # ---------- assemble the outputs ----------
     T_ = np.array(rec.T); L_si = np.array(rec.L_si); P_ = np.array(rec.P); ALT = np.array(rec.ALT)
@@ -1162,6 +1173,7 @@ def format_report(res: BolumResult, max_events=12):
     add(f"   strength        S0 = {p.strength0()/1e6:.4f} MPa  (loading = rho*v^2, stagnation pressure); Weibull alpha = {p.weibull_alpha}")
     add(f"   ablation        Lambda = {p.Lambda}  Q = {p.L_ablation:.2e} J/kg  -> sigma = Lambda/(2Q) = {p.Lambda/(2*p.L_ablation)*1e6:.4f} s^2/km^2")
     add(f"   fragmentation   {p.n_fragments} children/breakup, dust {p.dust_frac*100:.0f}% (r = {p.dust_radius*100:.1f} cm), spread c = {p.c_spread}, f_split = {p.f_split}, f_max = {p.f_max}")
+    add(f"                   smallest allowed child = min({p.m_min_frag:g} kg, {p.m_min_frag_frac:g} x m0) = {min(p.m_min_frag, p.m_min_frag_frac*s['m0']):.3g} kg")
     add(f"   sensor          band {p.sensor_lo_um}-{p.sensor_hi_um} um at T_rad = {p.T_rad:.0f} K -> f_si = {s['band_fraction']:.4f}   "
         f"(L_bol = L_si / f_si);  tau basis = {p.tau_basis}")
     add(f"   luminosity      eta = (1-w)*tau(v,m) + w*{p.eta_thick_bol:.2f}*f_si,  w = r/(r + {p.lum_r_half:g} m);  t_cool = {p.t_cool:g} s")

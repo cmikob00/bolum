@@ -1,0 +1,7 @@
+Winchcombe 2021 (McMullan et al. 2024 Meteorit. Planet. Sci.)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.25       # m   (~13 kg initial mass)
+velocity       = 13900.0    # m/s
+theta_deg      = 42.0       # deg to horizontal (zenith angle ~48°)
+init_strength  = 7.0e4      # Pa  (very fragile; near-catastrophic frag at ~0.07 MPa)
+density        = 2100.0     # kg/m3  (CM2; model value used in the paper)

@@ -1,0 +1,7 @@
+Buzzard Coulee 2008 (Hildebrand et al.; Milley et al.)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 1.5        # m   (~10–15 t)
+velocity       = 18000.0    # m/s
+theta_deg      = 67.0       # deg to horizontal (steep)
+init_strength  = 5.0e5      # Pa  (multiple fragmentation episodes; first significant >60 km)
+density        = 3400.0     # kg/m3  (H4 ordinary chondrite)

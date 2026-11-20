@@ -1,4 +1,4 @@
-Initialization Parameters for Bolide Luminosity and Fragmentation Simulation (bolum v2.2)
+Initialization Parameters for Bolide Luminosity and Fragmentation Simulation (bolum v2.4.0)
 diameter               1.8
 velocity               17500.0
 theta_deg              31.9
@@ -18,12 +18,13 @@ f_split                2.0
 f_max                  8.0
 max_groups             128
 m_min_frag             1.0
+m_min_frag_frac        0.001
 dust_frac              0.2
 dust_radius            0.02
 strength_secondary     None
 strength_tertiary      None
 strength_quaternary    None
-tau_basis              si
+tau_basis              bolometric
 T_rad                  6000.0
 sensor_lo_um           0.4
 sensor_hi_um           1.1

@@ -1,0 +1,7 @@
+Annama 2014 (Trigo-Rodríguez et al. 2015 MNRAS; Gritsevich et al.)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.65       # m   (~470–500 kg at 3500 kg/m3)
+velocity       = 24200.0    # m/s
+theta_deg      = 55.0       # deg to horizontal (approximate from trajectory data)
+init_strength  = 1.0e6      # Pa  (typical ordinary-chondrite onset; adjust if desired)
+density        = 3500.0     # kg/m3  (measured bulk density)

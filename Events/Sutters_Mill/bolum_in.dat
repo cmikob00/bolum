@@ -1,0 +1,7 @@
+Sutter's Mill 2012 (Jenniskens et al. 2012 Science)  -- bolum input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 3.0        # m   (~40 t; 2–4 m range)
+velocity       = 28600.0    # m/s  (record high for a recovered fall)
+theta_deg      = 25.0       # deg to horizontal (approximate)
+init_strength  = 3.0e5      # Pa  (carbonaceous; major breakup ~48 km)
+density        = 2200.0     # kg/m3  (CM-type; porous/regolith breccia)

@@ -1,0 +1,15 @@
+Fireball 2018 Apr 8 (meteorite not recovered)  -- bolum v2.3 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.342      # m   (from entry mass 71 kg at 3400 kg/m^3; mass from the published fragmentation model)
+velocity       = 16450    # m/s
+theta_deg      = 30.4       # deg to horizontal (= 90 - zenith distance 59.6 deg)
+init_strength  = 8e+04      # Pa  first-phase fragmentation, loading = rho*v^2
+strength_secondary = 6.5e5   # Pa  fragmentation at 0.65 MPa (documented on light curve and video)
+strength_tertiary  = 1.1e6   # Pa
+strength_quaternary = 1.4e6  # Pa
+density        = 3400      # kg/m^3
+
+# ---- sources ----
+# Borovicka, Spurny & Shrbeny (2020), Astron. J. 160, 42 (arXiv:2006.07080), Tables 1-3 and Sect. 4
+# Published targets: begins 88.65 km, ends 25.05 km, max abs. mag -12.7; ~34 cm diameter; fragmentations at 0.65, 1.1 and 1.4 MPa.
+# First-phase strength 0.08 MPa is a TYPICAL value (not stated for this event).

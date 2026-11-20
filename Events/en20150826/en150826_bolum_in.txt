@@ -1,0 +1,14 @@
+Fireball EN260815 (2015 Aug 26), meteorite not recovered  -- bolum v2.3 input deck
+format:  key = value   # comment   (first two lines are skipped)
+diameter       = 0.154      # m   (from entry mass 6.5 kg at 3400 kg/m^3; mass from the published fragmentation model)
+velocity       = 19360    # m/s
+theta_deg      = 36.7       # deg to horizontal (= 90 - zenith distance 53.3 deg)
+init_strength  = 4e+04      # Pa  first-phase fragmentation, loading = rho*v^2
+strength_secondary = 1.0e6   # Pa  flares at 43-40.5 km, 0.9-1.15 MPa (paper, Sect. 3.2)
+strength_tertiary  = 1.4e6   # Pa  last flare at 37 km, 1.4 MPa
+density        = 3400      # kg/m^3
+
+# ---- sources ----
+# Borovicka, Spurny & Shrbeny (2020), Astron. J. 160, 42 (arXiv:2006.07080), Tables 1-3 and Sect. 4 (worked example in Sect. 3.2, Figs. 3-4)
+# Published targets: first fragmentation 69 km (0.04 MPa); hump to ~3 s; three flares at 43-40.5 km; flare at 37 km (1.4 MPa); begins 90.04 km, ends 28.43 km; max abs. mag -11.5.
+# A 0.15 m body: tests the lower end of the size range. The paper models erosion (continuous dust release) here, which bolum does not.
